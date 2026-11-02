@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@import "ag-grid-community/styles/ag-theme-quartz.css";
+
+@theme inline {
+  --color-ink-950: #07131a;
+  --color-ink-900: #0d1c25;
+  --color-ink-800: #18313d;
+  --color-ink-700: #3b5360;
+  --color-ink-300: #b9c6c9;
+  --color-ink-200: #dbe3e3;
+  --color-ink-100: #edf1f0;
+  --color-ink-50: #f6f8f7;
+  --color-teal-50: #e8f7f4;
+  --color-teal-600: #057f79;
+  --color-teal-700: #056760;
+  --font-sans: "Aptos", "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+html { background: #f6f5f0; }
+body { margin: 0; background: #f6f5f0; color: #0d1c25; font-family: "Aptos", "Segoe UI", sans-serif; }
+button, input { font: inherit; }
+a { color: inherit; text-decoration: none; }
+
+.payroost-grid {
+  --ag-font-family: var(--font-manrope), sans-serif;
+  --ag-background-color: #ffffff;
+  --ag-foreground-color: #18313d;
+  --ag-header-background-color: #f6f8f7;
+  --ag-header-foreground-color: #3b5360;
+  --ag-border-color: #edf1f0;
+  --ag-row-border-color: #edf1f0;
+  --ag-accent-color: #057f79;
+  --ag-border-radius: 0.75rem;
+}

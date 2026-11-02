@@ -1,0 +1,2 @@
+import { Card } from "@/components/ui/card";
+export default function SettingsPage() { return <><p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Settings</p><h1 className="mt-2 font-display text-4xl text-ink-950">Account foundation.</h1><Card className="mt-8 max-w-2xl p-6"><h2 className="font-display text-2xl">Profile controls will follow.</h2><p className="mt-3 leading-7 text-ink-700">Your Supabase account is the authentication boundary. Profile editing will be added with the projects workflow.</p></Card></>; }

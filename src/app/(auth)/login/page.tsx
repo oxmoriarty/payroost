@@ -1,0 +1,2 @@
+import { AuthForm } from "@/components/auth/auth-form";
+export default function LoginPage() { return <><p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Welcome back</p><h1 className="mt-3 font-display text-4xl text-ink-950">Sign in to your workspace.</h1><p className="mt-3 text-ink-700">Continue where your project records left off.</p><div className="mt-9"><AuthForm mode="login" /></div></>; }
