@@ -1,0 +1,16 @@
+# dependencies and build output
+/node_modules
+/.next
+/coverage
+
+# local secrets (the template remains committed)
+.env*
+!.env.example
+
+# OS/editor files
+.DS_Store
+*.tsbuildinfo
+
+# Local working documents and chat history
+*.docx
+*.doc
