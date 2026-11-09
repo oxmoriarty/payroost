@@ -67,7 +67,9 @@ export type PortalRateLimitPrefix =
   | "portal-get"
   | "portal-otp"
   | "portal-session"
-  | "portal-payment-intent";
+  | "portal-payment-intent"
+  | "portal-payment-order"
+  | "portal-payment-capture";
 
 /**
  * Derives the mandatory, primary token-based rate-limit key.

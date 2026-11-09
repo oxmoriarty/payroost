@@ -178,6 +178,7 @@ export type PortalSessionAuthFailure =
 export interface AuthenticatedPortalSession {
   success: true;
   sessionId: string;
+  sessionTokenHash: string;
   projectId: string;
   clientEmail: string;
   csrfSecret: string;
@@ -355,6 +356,7 @@ export async function authenticatePortalSession(
   return {
     success: true,
     sessionId: validation.sessionId,
+    sessionTokenHash,
     projectId: validation.projectId,
     clientEmail: validation.clientEmail,
     csrfSecret: validation.csrfSecret,

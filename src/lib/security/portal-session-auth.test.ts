@@ -78,9 +78,9 @@ describe("Portal Session Authentication Helper: authenticatePortalSession", () =
       expect(result.clientEmail).toBe(validClientEmail);
       expect(result.csrfSecret).toBe(validCsrfSecret);
 
-      // Verify raw token and hash are never exposed on result
+      // Verify raw token is never exposed, but derived sessionTokenHash is securely provided
       expect(result).not.toHaveProperty("rawSessionToken");
-      expect(result).not.toHaveProperty("sessionTokenHash");
+      expect(result.sessionTokenHash).toBe(hashSessionToken(validRawToken));
     }
 
     expect(mockRpc).toHaveBeenCalledWith("validate_portal_session", {
