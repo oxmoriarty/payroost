@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
 import { PATCH } from "./[changeRequestId]/route";
 import * as rateLimitModule from "@/lib/security/rate-limit";
@@ -225,13 +225,25 @@ describe("/api/projects/[projectId]/change-requests & [changeRequestId] (AI-5)",
     });
   }
 
+  const originalSnapshotSecret = process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+  const testSnapshotSecret = "test-freelancer-cr-snapshot-secret-at-least-32-bytes!";
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    process.env.PAYROOST_AI_SNAPSHOT_SECRET = testSnapshotSecret;
     insertedPayloads = [];
     updatedPayloads = [];
     mockGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
     vi.spyOn(rateLimitModule, "allowRequest").mockResolvedValue(true);
     setupMockDb();
+  });
+
+  afterEach(() => {
+    if (originalSnapshotSecret === undefined) {
+      delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+    } else {
+      process.env.PAYROOST_AI_SNAPSHOT_SECRET = originalSnapshotSecret;
+    }
   });
 
   it("persists separated original request_text and signed ai_analysis without touching agreements, milestones, or payments", async () => {
@@ -423,5 +435,39 @@ describe("/api/projects/[projectId]/change-requests & [changeRequestId] (AI-5)",
       { params: Promise.resolve({ projectId: validProjectId, changeRequestId: validChangeRequestId }) }
     );
     expect(resAlreadyClosed.status).toBe(409);
+  });
+
+  it("fails closed with 503 CONFIGURATION_UNAVAILABLE without exposing secrets when verifying a snapshot with missing PAYROOST_AI_SNAPSHOT_SECRET", async () => {
+    const signedSnapshot = signScopeChangeAnalysisSnapshot({
+      analysis: baseAnalysis,
+      requestText: baseRequestText,
+      agreementVersionId: validVersionId,
+      agreementVersionNumber: 1,
+      projectId: validProjectId,
+      requesterRole: "OWNER",
+      model: "gemini-3.8-flash",
+    });
+
+    delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+
+    const res = await POST(
+      new Request(`http://localhost:3000/api/projects/${validProjectId}/change-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestText: baseRequestText,
+          agreementVersionId: validVersionId,
+          aiAnalysis: signedSnapshot,
+        }),
+      }),
+      { params: Promise.resolve({ projectId: validProjectId }) }
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const json = (await res.json()) as { error: string; message?: string };
+    expect(json.error).toBe("CONFIGURATION_UNAVAILABLE");
+    expect(JSON.stringify(json)).not.toContain(testSnapshotSecret);
+    expect(insertedPayloads).toHaveLength(0);
   });
 });

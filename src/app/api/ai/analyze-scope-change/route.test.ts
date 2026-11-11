@@ -9,6 +9,7 @@ import {
   AiRateLimitError,
   AiUnavailableError,
 } from "@/lib/ai/errors";
+import { SnapshotSigningConfigurationError } from "@/features/scope-changes/snapshot";
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
@@ -377,5 +378,17 @@ describe("POST /api/ai/analyze-scope-change (AI-5 Freelancer Preview)", () => {
         )
       ).status
     ).toBe(422);
+
+    vi.spyOn(scopeService, "analyzeScopeChange").mockRejectedValueOnce(
+      new SnapshotSigningConfigurationError(
+        "PAYROOST_AI_SNAPSHOT_SECRET must be configured with at least 32 bytes"
+      )
+    );
+    const snapshotConfigRes = await POST(
+      makeReq({ projectId: validProjectId, requestText: "Add audit dashboard." })
+    );
+    expect(snapshotConfigRes.status).toBe(503);
+    expect(snapshotConfigRes.headers.get("Cache-Control")).toBe("no-store");
+    expect((await snapshotConfigRes.json()).error).toBe("CONFIGURATION_UNAVAILABLE");
   });
 });

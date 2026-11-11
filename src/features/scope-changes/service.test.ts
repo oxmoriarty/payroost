@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgreementDraft } from "@/features/agreements/schema";
 import { clearAiAuditSinks, registerAiAuditSink, type AiAuditRecord } from "@/lib/ai/audit";
 import {
@@ -7,7 +7,11 @@ import {
 } from "@/lib/ai/errors";
 import { MockAiProvider } from "@/lib/ai/provider";
 import { analyzeScopeChange, type AnalyzeScopeChangeServiceInput } from "./service";
-import { hashChangeRequestText, verifyScopeChangeSnapshotSignature } from "./snapshot";
+import {
+  hashChangeRequestText,
+  SnapshotSigningConfigurationError,
+  verifyScopeChangeSnapshotSignature,
+} from "./snapshot";
 
 const sampleAgreementContent: AgreementDraft = {
   summary: "Build a B2B SaaS onboarding dashboard with milestone-based releases.",
@@ -217,14 +221,25 @@ function makeRawAiOutput(overrides: Record<string, unknown> = {}) {
 }
 
 describe("analyzeScopeChange service (AI-5)", () => {
+  const originalSnapshotSecret = process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+  const testSnapshotSecret = "test-ai-snapshot-hmac-secret-minimum-32-bytes-key!";
   let audits: AiAuditRecord[];
 
   beforeEach(() => {
+    process.env.PAYROOST_AI_SNAPSHOT_SECRET = testSnapshotSecret;
     audits = [];
     clearAiAuditSinks();
     registerAiAuditSink((record) => {
       audits.push(record);
     });
+  });
+
+  afterEach(() => {
+    if (originalSnapshotSecret === undefined) {
+      delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+    } else {
+      process.env.PAYROOST_AI_SNAPSHOT_SECRET = originalSnapshotSecret;
+    }
   });
 
   it("analyzes a valid scope addition, reconciles minor units, signs snapshot, and logs sanitized audit", async () => {
@@ -593,5 +608,26 @@ describe("analyzeScopeChange service (AI-5)", () => {
 
     const result = await analyzeScopeChange(makeInput(), { provider });
     expect(result.analysis.overallClassification).toBe("LOW");
+  });
+
+  it("fails closed with SnapshotSigningConfigurationError before calling provider when PAYROOST_AI_SNAPSHOT_SECRET is missing or weak", async () => {
+    delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+    const generateSpy = vi.fn();
+    const provider = {
+      name: "mock",
+      modelName: "gemini-3.8-flash",
+      generateStructured: generateSpy,
+    } as unknown as MockAiProvider;
+
+    await expect(analyzeScopeChange(makeInput(), { provider })).rejects.toThrow(
+      SnapshotSigningConfigurationError
+    );
+    expect(generateSpy).not.toHaveBeenCalled();
+
+    process.env.PAYROOST_AI_SNAPSHOT_SECRET = "too-short";
+    await expect(analyzeScopeChange(makeInput(), { provider })).rejects.toThrow(
+      SnapshotSigningConfigurationError
+    );
+    expect(generateSpy).not.toHaveBeenCalled();
   });
 });

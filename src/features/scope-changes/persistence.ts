@@ -19,6 +19,7 @@ import {
 } from "./context";
 import type { ScopeChangeRequesterRole } from "./schema";
 import { analyzeScopeChange } from "./service";
+import { SnapshotSigningConfigurationError } from "./snapshot";
 
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const;
 
@@ -44,6 +45,9 @@ export function mapScopeContextFailure(
 }
 
 export function mapScopeAiError(error: unknown): NextResponse {
+  if (error instanceof SnapshotSigningConfigurationError) {
+    return apiError("CONFIGURATION_UNAVAILABLE", 503, NO_STORE_HEADERS);
+  }
   if (error instanceof AiConfigurationError) {
     return apiError("AI_CONFIGURATION_ERROR", 500, NO_STORE_HEADERS);
   }

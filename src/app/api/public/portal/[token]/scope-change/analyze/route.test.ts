@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import * as rateLimitModule from "@/lib/security/rate-limit";
 import * as scopeService from "@/features/scope-changes/service";
+import { SnapshotSigningConfigurationError } from "@/features/scope-changes/snapshot";
 import type { StoredScopeChangeAnalysis } from "@/features/scope-changes/schema";
 import { PORTAL_SESSION_COOKIE_NAME_DEV } from "@/lib/security/portal-session";
 
@@ -316,5 +317,21 @@ describe("POST /api/public/portal/[token]/scope-change/analyze (AI-5 Client Port
     );
     expect(insertedTables).toEqual([]);
     expect(updatedTables).toEqual([]);
+  });
+
+  it("returns 503 CONFIGURATION_UNAVAILABLE without leaking secrets when snapshot signing secret is invalid", async () => {
+    vi.spyOn(scopeService, "analyzeScopeChange").mockRejectedValueOnce(
+      new SnapshotSigningConfigurationError(
+        "PAYROOST_AI_SNAPSHOT_SECRET must be configured with at least 32 bytes"
+      )
+    );
+
+    const res = await POST(makeReq(), {
+      params: Promise.resolve({ token: validToken }),
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect((await res.json()).error).toBe("CONFIGURATION_UNAVAILABLE");
   });
 });

@@ -9,13 +9,56 @@ import type {
 } from "./schema";
 
 const HEX_64_REGEX = /^[a-f0-9]{64}$/i;
+const MIN_SNAPSHOT_SECRET_BYTES = 32;
+const KNOWN_PLACEHOLDER_SECRET_PATTERN =
+  /do-not-use-in-production|default-ai-snapshot|default-otp-secret|placeholder|changeme|change-me|replace-me|replace-with|your-secret|sample-secret|example-secret/i;
+const REPEATED_SINGLE_CHAR_PATTERN = /^(.)\1+$/;
 
-function getSnapshotSigningSecret(): string {
-  return (
-    process.env.PAYROOST_AI_SNAPSHOT_SECRET ||
-    process.env.PAYROOST_OTP_SECRET ||
-    "payroost-default-ai-snapshot-secret-key-do-not-use-in-production"
-  );
+export class SnapshotSigningConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SnapshotSigningConfigurationError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+/**
+ * Resolves and strictly validates the dedicated server-only HMAC secret used to sign
+ * and verify AI scope-change analysis snapshots.
+ *
+ * Always fails closed if missing, blank, shorter than 32 UTF-8 bytes, trivial, or set to a
+ * known placeholder value — never falls back to hardcoded defaults or unrelated secrets.
+ */
+export function getSnapshotSigningSecret(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  secretOverride?: string
+): string {
+  const candidate =
+    secretOverride !== undefined ? secretOverride : env.PAYROOST_AI_SNAPSHOT_SECRET;
+
+  if (typeof candidate !== "string") {
+    throw new SnapshotSigningConfigurationError(
+      "PAYROOST_AI_SNAPSHOT_SECRET must be configured with at least 32 bytes"
+    );
+  }
+
+  const trimmed = candidate.trim();
+  if (!trimmed || Buffer.byteLength(trimmed, "utf8") < MIN_SNAPSHOT_SECRET_BYTES) {
+    throw new SnapshotSigningConfigurationError(
+      "PAYROOST_AI_SNAPSHOT_SECRET must contain at least 32 bytes of secret material"
+    );
+  }
+
+  if (
+    KNOWN_PLACEHOLDER_SECRET_PATTERN.test(trimmed) ||
+    REPEATED_SINGLE_CHAR_PATTERN.test(trimmed)
+  ) {
+    throw new SnapshotSigningConfigurationError(
+      "PAYROOST_AI_SNAPSHOT_SECRET must not use a placeholder or trivial value"
+    );
+  }
+
+  return trimmed;
 }
 
 /**
@@ -111,6 +154,9 @@ export function signScopeChangeAnalysisSnapshot(params: {
 export function verifyScopeChangeSnapshotSignature(
   snapshot: StoredScopeChangeAnalysis
 ): boolean {
+  // Validate signing secret upfront so misconfiguration always fails closed.
+  getSnapshotSigningSecret();
+
   const { snapshotMetadata, ...analysis } = snapshot;
 
   if (!HEX_64_REGEX.test(snapshotMetadata.integrityTag)) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import * as rateLimitModule from "@/lib/security/rate-limit";
 import { signScopeChangeAnalysisSnapshot } from "@/features/scope-changes/snapshot";
@@ -205,8 +205,12 @@ describe("POST /api/public/portal/[token]/change-requests (AI-5 Client Portal Su
     );
   }
 
+  const originalSnapshotSecret = process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+  const testSnapshotSecret = "test-portal-cr-snapshot-secret-at-least-32-bytes!";
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    process.env.PAYROOST_AI_SNAPSHOT_SECRET = testSnapshotSecret;
     insertedPayloads = [];
     updatedTables = [];
     vi.spyOn(rateLimitModule, "checkRateLimit").mockResolvedValue({
@@ -231,6 +235,14 @@ describe("POST /api/public/portal/[token]/change-requests (AI-5 Client Portal Su
       error: null,
     });
     setupMockDb();
+  });
+
+  afterEach(() => {
+    if (originalSnapshotSecret === undefined) {
+      delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+    } else {
+      process.env.PAYROOST_AI_SNAPSHOT_SECRET = originalSnapshotSecret;
+    }
   });
 
   it("enforces token format (404), rate limiting (429/503), CSRF (403), and cross-project portal session binding (403)", async () => {
@@ -454,6 +466,39 @@ describe("POST /api/public/portal/[token]/change-requests (AI-5 Client Portal Su
     );
     expect(resForeignVer.status).toBe(403);
 
+    expect(insertedPayloads).toHaveLength(0);
+  });
+
+  it("fails closed with 503 CONFIGURATION_UNAVAILABLE when verifying a signed snapshot without PAYROOST_AI_SNAPSHOT_SECRET", async () => {
+    const signedClientSnapshot = signScopeChangeAnalysisSnapshot({
+      analysis: baseAnalysis,
+      requestText: baseRequestText,
+      agreementVersionId: validVersionId,
+      agreementVersionNumber: 1,
+      projectId: validProjectId,
+      requesterRole: "CLIENT",
+      model: "gemini-3.8-flash",
+      analyzedAt: "2026-11-11T10:30:00.000Z",
+    });
+
+    delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+
+    const res = await POST(
+      makeReq({
+        body: {
+          requestText: baseRequestText,
+          agreementVersionId: validVersionId,
+          aiAnalysis: signedClientSnapshot,
+        },
+      }),
+      { params: Promise.resolve({ token: validToken }) }
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const json = (await res.json()) as { error: string; message?: string };
+    expect(json.error).toBe("CONFIGURATION_UNAVAILABLE");
+    expect(JSON.stringify(json)).not.toContain(testSnapshotSecret);
     expect(insertedPayloads).toHaveLength(0);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assembleProjectAssistantContext } from "./context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { signScopeChangeAnalysisSnapshot } from "@/features/scope-changes/snapshot";
@@ -379,6 +379,21 @@ function createMockSupabase(options?: {
 }
 
 describe("assembleProjectAssistantContext (AI-6)", () => {
+  const originalSnapshotSecret = process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+  const testSnapshotSecret = "test-assistant-context-snapshot-secret-32-bytes!!";
+
+  beforeEach(() => {
+    process.env.PAYROOST_AI_SNAPSHOT_SECRET = testSnapshotSecret;
+  });
+
+  afterEach(() => {
+    if (originalSnapshotSecret === undefined) {
+      delete process.env.PAYROOST_AI_SNAPSHOT_SECRET;
+    } else {
+      process.env.PAYROOST_AI_SNAPSHOT_SECRET = originalSnapshotSecret;
+    }
+  });
+
   it("enforces owner and client authorization before returning project context", async () => {
     const { client } = createMockSupabase();
 

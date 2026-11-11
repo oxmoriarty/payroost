@@ -10,6 +10,7 @@ import {
 } from "./schema";
 import {
   hashChangeRequestText,
+  SnapshotSigningConfigurationError,
   verifyScopeChangeSnapshotSignature,
 } from "./snapshot";
 
@@ -309,12 +310,13 @@ export type ValidateSubmittedSnapshotResult =
   | { ok: true; analysis: StoredScopeChangeAnalysis }
   | {
       ok: false;
-      status: 400 | 403 | 409;
+      status: 400 | 403 | 409 | 503;
       code:
         | "VALIDATION_ERROR"
         | "INVALID_ANALYSIS_SIGNATURE"
         | "FORBIDDEN_ANALYSIS_CONTEXT"
-        | "STALE_ANALYSIS";
+        | "STALE_ANALYSIS"
+        | "CONFIGURATION_UNAVAILABLE";
       message: string;
     };
 
@@ -341,7 +343,22 @@ export function validateSubmittedAiAnalysisSnapshot(params: {
 
   const snapshot = parsed.data;
 
-  if (!verifyScopeChangeSnapshotSignature(snapshot)) {
+  let isValidSignature: boolean;
+  try {
+    isValidSignature = verifyScopeChangeSnapshotSignature(snapshot);
+  } catch (error) {
+    if (error instanceof SnapshotSigningConfigurationError) {
+      return {
+        ok: false,
+        status: 503,
+        code: "CONFIGURATION_UNAVAILABLE",
+        message: "Scope-change snapshot verification is unavailable due to server configuration.",
+      };
+    }
+    throw error;
+  }
+
+  if (!isValidSignature) {
     return {
       ok: false,
       status: 403,

@@ -26,7 +26,11 @@ import {
   type ScopeChangeRequesterRole,
   type StoredScopeChangeAnalysis,
 } from "./schema";
-import { signScopeChangeAnalysisSnapshot } from "./snapshot";
+import {
+  getSnapshotSigningSecret,
+  signScopeChangeAnalysisSnapshot,
+  SnapshotSigningConfigurationError,
+} from "./snapshot";
 
 export interface AnalyzeScopeChangeServiceInput {
   projectId: string;
@@ -653,6 +657,9 @@ export async function analyzeScopeChange(
   });
 
   try {
+    // Validate snapshot signing secret upfront before calling the AI provider.
+    getSnapshotSigningSecret();
+
     const result = await provider.generateStructured(prompt, aiRawScopeChangeOutputSchema, {
       systemInstruction: SCOPE_CHANGE_SYSTEM_INSTRUCTION,
       timeoutMs: options.timeoutMs ?? 30_000,
@@ -725,6 +732,7 @@ export async function analyzeScopeChange(
     });
 
     if (
+      error instanceof SnapshotSigningConfigurationError ||
       error instanceof AiConfigurationError ||
       error instanceof AiRateLimitError ||
       error instanceof AiFinancialReconciliationError ||
