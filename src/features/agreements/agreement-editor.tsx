@@ -97,6 +97,7 @@ export function AgreementEditor({
   const draftVersion = versions.find((version) => version.status === "DRAFT") ?? null;
   const initial = useMemo(() => getDraft(draftVersion), [draftVersion]);
   const [draft, setDraft] = useState<AgreementDraft | null>(initial);
+  const [isPreviewDraft, setIsPreviewDraft] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
@@ -104,8 +105,43 @@ export function AgreementEditor({
   function setValue<K extends keyof AgreementDraft>(key: K, value: AgreementDraft[K]) { if (draft) setDraft({ ...draft, [key]: value }); }
   async function request(path: string, body: unknown) { const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await response.json() as { data?: unknown; error?: string; reviewUrl?: string }; if (!response.ok) throw new Error(json.error ?? "Request failed"); return json; }
   async function createManual() { setBusy(true); setNotice(null); try { const json = await request(`/api/projects/${projectId}/agreement`, { action: "CREATE_MANUAL" }); setNotice("Draft created. Refresh the page to load it into the editor."); if (json.data) window.location.reload(); } catch (error) { setNotice(error instanceof Error ? error.message : "Unable to create a draft."); } finally { setBusy(false); } }
-  async function generate() { setBusy(true); setNotice(null); try { await request("/api/ai/generate-agreement", { projectId }); setNotice("AI draft generated. Refreshing…"); window.location.reload(); } catch (error) { setNotice(error instanceof Error ? error.message : "AI is unavailable. You can continue manually."); } finally { setBusy(false); } }
-  async function save() { if (!draft) return; setBusy(true); setNotice(null); try { await request(`/api/projects/${projectId}/agreement`, { content: draft }); setNotice("Draft saved."); } catch (error) { setNotice(error instanceof Error ? error.message : "Unable to save the draft."); } finally { setBusy(false); } }
+  async function generate() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const json = await request("/api/ai/generate-agreement", { projectId }) as {
+        data?: { draft?: AgreementDraft; preview?: boolean };
+      };
+      if (json.data?.draft) {
+        setDraft(json.data.draft);
+        setIsPreviewDraft(true);
+        setNotice("✨ AI proposed agreement loaded in preview. Review the terms and milestone allocations below, make any adjustments, and click 'Save draft' to apply.");
+      } else {
+        setNotice("AI returned an empty response. You can continue manually.");
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "AI is unavailable. You can continue manually.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function save() {
+    if (!draft) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await request(`/api/projects/${projectId}/agreement`, {
+        content: draft,
+        source: isPreviewDraft ? "AI_ASSISTED" : "MANUAL",
+      });
+      setIsPreviewDraft(false);
+      setNotice("Draft saved successfully.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to save the draft.");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function sendForReview() {
     if (!draft) return;
     if (!isClientVerified) {
@@ -136,8 +172,49 @@ export function AgreementEditor({
             <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Agreement editor</p>
             <h2 className="mt-1 font-display text-2xl">Version {draftVersion?.version_number ?? "new"}</h2>
           </div>
-          <Badge tone="info">Draft — review before sending</Badge>
+          <div className="flex items-center gap-2">
+            {canUseAi && (
+              <Button
+                className="min-h-8 px-3 text-xs"
+                disabled={busy}
+                onClick={generate}
+                type="button"
+                variant="secondary"
+              >
+                <Bot className="mr-1.5 h-3.5 w-3.5" /> Re-propose with AI
+              </Button>
+            )}
+            <Badge tone={isPreviewDraft ? "warning" : "info"}>
+              {isPreviewDraft ? "AI Proposal (Preview)" : "Draft — review before sending"}
+            </Badge>
+          </div>
         </div>
+
+        {isPreviewDraft && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
+            <div>
+              <p className="font-bold text-teal-900">AI Proposed Agreement (Preview Mode)</p>
+              <p className="mt-0.5 text-teal-800">
+                This draft was generated from the project brief and is currently in preview. It will NOT overwrite your saved agreement until you explicitly click &quot;Save draft&quot;.
+              </p>
+            </div>
+            {initial && (
+              <Button
+                className="min-h-7 px-2.5 text-xs"
+                disabled={busy}
+                onClick={() => {
+                  setDraft(initial);
+                  setIsPreviewDraft(false);
+                  setNotice("Reverted to previously saved draft.");
+                }}
+                type="button"
+                variant="ghost"
+              >
+                Discard proposal
+              </Button>
+            )}
+          </div>
+        )}
         <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900">
           This workspace helps document project terms. It is not legal advice, and no draft is automatically approved or legally binding.
         </p>
