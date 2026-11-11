@@ -109,13 +109,14 @@ describe("POST /api/public/portal/[token]/payments/intents", () => {
       status: "allowed",
     });
 
-    // Default PayPal configuration
+    // Default PayPal configuration (Explicit isolated legacy Merchant mode for 3B.3 unit suite)
     vi.spyOn(paypalEnvModule, "getPayPalServerEnv").mockReturnValue({
       environment: "sandbox",
       baseUrl: "https://api-m.sandbox.paypal.com",
       clientId: "CLIENT_ID_123",
       clientSecret: "CLIENT_SECRET_123",
       expectedMerchantId: validExpectedMerchantId,
+      paymentMode: "MERCHANT",
     });
 
     // Default database tables mock

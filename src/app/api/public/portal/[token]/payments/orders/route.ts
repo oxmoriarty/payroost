@@ -12,6 +12,7 @@ import {
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
 import { PayPalError } from "@/lib/paypal/types";
+import { verifyProjectSellerReadiness } from "@/features/payments/seller-verification";
 import { apiError } from "@/lib/http";
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{20,128}$/;
@@ -593,55 +594,223 @@ export async function POST(
     });
   }
 
-  const paypalOrderPayload = {
-    intent: "CAPTURE",
-    purchase_units: canonicalPayload.purchase_units,
-  };
+  const serverPaymentMode = paypalEnv.paymentMode ?? "PLATFORM";
+  const intentPayload = (intent.canonical_payload_json as Record<string, unknown>) || {};
+  const intentPaymentMode =
+    typeof intentPayload.payment_mode === "string"
+      ? intentPayload.payment_mode
+      : intentPayload.platform === true
+        ? "PLATFORM"
+        : undefined;
 
-  const paypalClient = new PayPalClient(paypalEnv);
-
-  // 19. Execute PayPal Orders API Call with Persisted Idempotency Key & Prefer Representation
-  let paypalResponse: PayPalOrderResponse;
-  try {
-    const res = await paypalClient.post<PayPalOrderResponse>(
-      "/v2/checkout/orders",
-      paypalOrderPayload,
-      {
-        paypalRequestId: intent.order_idempotency_key,
-        headers: {
-          Prefer: "return=representation",
-        },
-      }
-    );
-    paypalResponse = res.data;
-  } catch (err: unknown) {
-    // Release the lease immediately using the fencing token
+  // Reject mode mismatch:
+  // - Never execute an explicit MERCHANT-mode intent when server runs in PLATFORM mode.
+  // - Never downgrade a PLATFORM-mode intent into legacy MERCHANT checkout.
+  if (
+    (serverPaymentMode === "PLATFORM" && intentPaymentMode === "MERCHANT") ||
+    (serverPaymentMode === "MERCHANT" && intentPaymentMode === "PLATFORM")
+  ) {
     await serviceClient.rpc("release_order_creation_lease", {
       p_session_token_hash: authResult.sessionTokenHash,
       p_payment_intent_id: intent.id,
       p_lease_token: leaseToken,
     });
+    return apiError("PAYMENT_MODE_MISMATCH", 409, {
+      "Cache-Control": "no-store",
+    });
+  }
 
-    if (err instanceof PayPalError) {
-      if (err.status === 408 || err.errorName === "REQUEST_TIMEOUT") {
+  const isPlatformOrder =
+    serverPaymentMode === "PLATFORM" || intentPaymentMode === "PLATFORM";
+
+  const paypalClient = new PayPalClient(paypalEnv);
+
+  let approvalUrl: string | null = null;
+  let paypalResponse: PayPalOrderResponse;
+  let sellerPayerId: string | undefined;
+
+  if (isPlatformOrder) {
+    // SEC-R21-01: In Platform mode, incomplete Platform Partner configuration MUST fail closed.
+    // Zero silent fallback to legacy Merchant mode.
+    const partnerMerchantId = paypalEnv.partnerMerchantId?.trim();
+    if (!partnerMerchantId || partnerMerchantId.length < 3 || partnerMerchantId.length > 64) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("CONFIGURATION_ERROR", 500, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    // Re-verify seller readiness server-side before initiating multi-party order
+    const sellerCheck = await verifyProjectSellerReadiness(serviceClient, authResult.projectId);
+    if (sellerCheck.error === "DATABASE_UNAVAILABLE") {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("DATABASE_UNAVAILABLE", 503, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    if (!sellerCheck.success || !sellerCheck.sellerMerchantId) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      const errorCode = sellerCheck.error || "SELLER_NOT_PAYABLE";
+      return apiError(errorCode, 400, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    if (
+      sellerCheck.sellerMerchantId !== intent.expected_merchant_id ||
+      (typeof intentPayload.seller_merchant_id === "string" &&
+        intentPayload.seller_merchant_id !== sellerCheck.sellerMerchantId)
+    ) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("SELLER_MISMATCH", 400, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    const intentSellerPayerId =
+      typeof intentPayload.seller_payer_id === "string"
+        ? intentPayload.seller_payer_id
+        : undefined;
+    sellerPayerId =
+      intentSellerPayerId ??
+      sellerCheck.sellerPayerId ??
+      sellerCheck.sellerMerchantId;
+
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "payroost.com";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const origin = request.headers.get("origin") || `${proto}://${host}`;
+
+    const returnUrl = `${origin}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=approved`;
+    const cancelUrl = `${origin}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=cancelled`;
+
+    try {
+      const platformResult = await paypalClient.createPlatformOrder({
+        sellerMerchantId: intent.expected_merchant_id,
+        sellerPayerId,
+        milestoneId: intent.milestone_id,
+        paymentIntentId: intent.id,
+        amountCanonical: intent.expected_amount_canonical,
+        currency: "USD",
+        idempotencyKey: intent.order_idempotency_key,
+        returnUrl,
+        cancelUrl,
+      });
+
+      approvalUrl = platformResult.approvalUrl;
+      paypalResponse = (platformResult.rawResponse as PayPalOrderResponse) || {
+        id: platformResult.orderId,
+        status: platformResult.status,
+      };
+    } catch (err: unknown) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+
+      if (err instanceof PayPalError) {
+        if (err.errorName === "CONFIGURATION_ERROR") {
+          return apiError("CONFIGURATION_ERROR", 500, {
+            "Cache-Control": "no-store",
+          });
+        }
+        if (
+          err.errorName === "INVALID_SELLER_PAYER_ID" ||
+          err.errorName === "INVALID_SELLER_MERCHANT_ID"
+        ) {
+          return apiError(err.errorName, 400, {
+            "Cache-Control": "no-store",
+          });
+        }
+        if (err.status === 408 || err.errorName === "REQUEST_TIMEOUT") {
+          return apiError("PROVIDER_TIMEOUT", 504, {
+            "Cache-Control": "no-store",
+          });
+        }
+        return apiError("PROVIDER_ERROR", 502, {
+          "Cache-Control": "no-store",
+        });
+      }
+
+      if (err instanceof Error && err.name === "AbortError") {
         return apiError("PROVIDER_TIMEOUT", 504, {
           "Cache-Control": "no-store",
         });
       }
-      return apiError("PROVIDER_ERROR", 502, {
+
+      return apiError("PROVIDER_UNAVAILABLE", 502, {
         "Cache-Control": "no-store",
       });
     }
+  } else {
+    // Standard single-merchant order creation
+    const paypalOrderPayload = {
+      intent: "CAPTURE",
+      purchase_units: canonicalPayload.purchase_units,
+    };
 
-    if (err instanceof Error && err.name === "AbortError") {
-      return apiError("PROVIDER_TIMEOUT", 504, {
+    try {
+      const res = await paypalClient.post<PayPalOrderResponse>(
+        "/v2/checkout/orders",
+        paypalOrderPayload,
+        {
+          paypalRequestId: intent.order_idempotency_key,
+          headers: {
+            Prefer: "return=representation",
+          },
+        }
+      );
+      paypalResponse = res.data;
+      const approvalLink = paypalResponse.links?.find(
+        (l) => l.rel === "payer-action" || l.rel === "approve"
+      );
+      approvalUrl = approvalLink?.href ?? null;
+    } catch (err: unknown) {
+      // Release the lease immediately using the fencing token
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+
+      if (err instanceof PayPalError) {
+        if (err.status === 408 || err.errorName === "REQUEST_TIMEOUT") {
+          return apiError("PROVIDER_TIMEOUT", 504, {
+            "Cache-Control": "no-store",
+          });
+        }
+        return apiError("PROVIDER_ERROR", 502, {
+          "Cache-Control": "no-store",
+        });
+      }
+
+      if (err instanceof Error && err.name === "AbortError") {
+        return apiError("PROVIDER_TIMEOUT", 504, {
+          "Cache-Control": "no-store",
+        });
+      }
+
+      return apiError("PROVIDER_UNAVAILABLE", 502, {
         "Cache-Control": "no-store",
       });
     }
-
-    return apiError("PROVIDER_UNAVAILABLE", 502, {
-      "Cache-Control": "no-store",
-    });
   }
 
   // 20. Validate Initial PayPal Response Structure
@@ -666,13 +835,29 @@ export async function POST(
 
   if (isMinimalRepresentation) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderResponse>(
-        `/v2/checkout/orders/${encodeURIComponent(orderId)}`
-      );
+      const getRes = isPlatformOrder
+        ? await paypalClient.get<PayPalOrderResponse>(
+            `/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+            {
+              authAssertion: { payerId: sellerPayerId || intent.expected_merchant_id },
+              ...(paypalEnv.partnerAttributionId
+                ? { partnerAttributionId: paypalEnv.partnerAttributionId }
+                : {}),
+            }
+          )
+        : await paypalClient.get<PayPalOrderResponse>(
+            `/v2/checkout/orders/${encodeURIComponent(orderId)}`
+          );
       if (!getRes || !getRes.data) {
         throw new Error("Empty response from PayPal order details");
       }
       paypalResponse = getRes.data;
+      if (!approvalUrl) {
+        const approvalLink = paypalResponse.links?.find(
+          (l) => l.rel === "payer-action" || l.rel === "approve"
+        );
+        approvalUrl = approvalLink?.href ?? null;
+      }
     } catch {
       await serviceClient.rpc("mark_intent_reconciliation_required", {
         p_session_token_hash: authResult.sessionTokenHash,
@@ -690,7 +875,7 @@ export async function POST(
   const validation = validateOrderPayload(paypalResponse, {
     intentId: intent.id,
     milestoneId: intent.milestone_id,
-    expectedMerchantId: paypalEnv.expectedMerchantId,
+    expectedMerchantId: intent.expected_merchant_id,
     expectedAmountCanonical: intent.expected_amount_canonical,
   });
 
@@ -721,7 +906,7 @@ export async function POST(
       p_payment_intent_id: intent.id,
       p_lease_token: leaseToken,
       p_provider_order_id: orderId,
-      p_expected_merchant_id: paypalEnv.expectedMerchantId,
+      p_expected_merchant_id: intent.expected_merchant_id,
     }
   );
 
@@ -756,6 +941,7 @@ export async function POST(
       success: true,
       paymentIntentId: intent.id,
       orderId,
+      approvalUrl: approvalUrl ?? null,
       status: "ORDER_CREATED",
     },
     {

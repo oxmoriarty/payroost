@@ -5,6 +5,8 @@
  * Provider implementation details are kept strictly typed and isolated from core domain models.
  */
 
+export type PayPalPaymentMode = "PLATFORM" | "MERCHANT";
+
 export interface PayPalConfig {
   environment: "sandbox";
   baseUrl: string;
@@ -13,6 +15,11 @@ export interface PayPalConfig {
   expectedMerchantId: string;
   webhookId?: string;
   timeoutMs?: number;
+  platformClientId?: string;
+  platformClientSecret?: string;
+  partnerMerchantId?: string;
+  partnerAttributionId?: string;
+  paymentMode?: PayPalPaymentMode;
 }
 
 export interface PayPalOAuthTokenResponse {
@@ -78,10 +85,51 @@ export interface PayPalRequestOptions {
   headers?: Record<string, string>;
   timeoutMs?: number;
   paypalRequestId?: string;
+  partnerAttributionId?: string;
+  authAssertion?: { payerId: string };
 }
 
 export interface PayPalApiResponse<T = unknown> {
   data: T;
   status: number;
   headers: Headers;
+}
+
+export interface CreatePlatformOrderParams {
+  sellerMerchantId: string;
+  sellerPayerId?: string;
+  milestoneId: string;
+  paymentIntentId: string;
+  amountCanonical: string;
+  currency?: string;
+  idempotencyKey: string;
+  returnUrl: string;
+  cancelUrl: string;
+}
+
+export interface PlatformOrderResult {
+  orderId: string;
+  status: string;
+  approvalUrl: string | null;
+  sellerMerchantId: string;
+  sellerPayerId?: string;
+  rawResponse?: PayPalOrderResource;
+}
+
+export interface PayPalOrderResource {
+  id: string;
+  status: string;
+  purchase_units?: Array<{
+    reference_id?: string;
+    custom_id?: string;
+    amount?: {
+      currency_code?: string;
+      value?: string;
+    };
+    payee?: {
+      merchant_id?: string;
+      email_address?: string;
+    };
+  }>;
+  links?: Array<{ href: string; rel: string; method?: string }>;
 }

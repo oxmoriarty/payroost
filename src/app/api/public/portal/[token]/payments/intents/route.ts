@@ -10,6 +10,7 @@ import {
   getPortalIpRateLimitKey,
 } from "@/lib/security/client-ip";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
+import { verifyProjectSellerReadiness } from "@/features/payments/seller-verification";
 import { apiError } from "@/lib/http";
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{20,128}$/;
@@ -331,15 +332,53 @@ export async function POST(
     );
   }
 
-  // 12. Retrieve trusted merchant configuration
-  let expectedMerchantId: string;
+  // 12. Resolve Authoritative Payee Merchant Identity & Explicit Integration Mode
+  let paypalEnv: ReturnType<typeof getPayPalServerEnv>;
   try {
-    const paypalEnv = getPayPalServerEnv();
-    expectedMerchantId = paypalEnv.expectedMerchantId;
+    paypalEnv = getPayPalServerEnv();
   } catch {
     return apiError("CONFIGURATION_ERROR", 500, {
       "Cache-Control": "no-store",
     });
+  }
+
+  const paymentMode = paypalEnv.paymentMode ?? "PLATFORM";
+  let expectedMerchantId: string;
+  let sellerPayerId: string | undefined;
+
+  if (paymentMode === "PLATFORM") {
+    // SEC-R21-01: In Platform mode, incomplete Platform Partner configuration MUST fail closed.
+    // Zero silent fallback to legacy Merchant mode.
+    const partnerMerchantId = paypalEnv.partnerMerchantId?.trim();
+    if (!partnerMerchantId || partnerMerchantId.length < 3 || partnerMerchantId.length > 64) {
+      return apiError("CONFIGURATION_ERROR", 500, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    // Authoritative server-side seller readiness check
+    const sellerCheck = await verifyProjectSellerReadiness(serviceClient, authResult.projectId);
+
+    if (sellerCheck.error === "DATABASE_UNAVAILABLE") {
+      return apiError("DATABASE_UNAVAILABLE", 503, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    if (!sellerCheck.success || !sellerCheck.sellerMerchantId) {
+      // SEC-R21-02: If seller is not connected or readiness fails, fail closed immediately.
+      // Never fall back to PayRoost's merchant account.
+      const errorCode = sellerCheck.error || "SELLER_NOT_PAYABLE";
+      return apiError(errorCode, 400, {
+        "Cache-Control": "no-store",
+      });
+    }
+
+    expectedMerchantId = sellerCheck.sellerMerchantId;
+    sellerPayerId = sellerCheck.sellerPayerId || sellerCheck.sellerMerchantId;
+  } else {
+    // Explicit legacy Merchant checkout mode (Phase 3B.3/3B.4 compatibility)
+    expectedMerchantId = paypalEnv.expectedMerchantId;
   }
 
   if (
@@ -371,6 +410,9 @@ export async function POST(
         },
       },
     ],
+    payment_mode: paymentMode,
+    seller_merchant_id: paymentMode === "PLATFORM" ? expectedMerchantId : undefined,
+    seller_payer_id: paymentMode === "PLATFORM" ? sellerPayerId : undefined,
   };
 
   // 14. Create payment intent via privileged service-role RPC

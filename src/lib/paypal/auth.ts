@@ -67,8 +67,16 @@ export class PayPalAuthManager {
    */
   private async fetchNewToken(): Promise<string> {
     const url = `${this.config.baseUrl}/v1/oauth2/token`;
+    const effectiveClientId =
+      this.config.paymentMode === "PLATFORM"
+        ? this.config.platformClientId || this.config.clientId
+        : this.config.clientId;
+    const effectiveClientSecret =
+      this.config.paymentMode === "PLATFORM"
+        ? this.config.platformClientSecret || this.config.clientSecret
+        : this.config.clientSecret;
     const basicAuth = Buffer.from(
-      `${this.config.clientId}:${this.config.clientSecret}`
+      `${effectiveClientId}:${effectiveClientSecret}`
     ).toString("base64");
 
     const controller = new AbortController();

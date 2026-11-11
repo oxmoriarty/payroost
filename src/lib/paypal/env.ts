@@ -24,6 +24,16 @@ const paypalEnvSchema = z.object({
     .min(3, "PAYPAL_EXPECTED_MERCHANT_ID must be at least 3 characters")
     .max(64, "PAYPAL_EXPECTED_MERCHANT_ID cannot exceed 64 characters"),
   PAYPAL_WEBHOOK_ID: z.string().trim().optional(),
+
+  // Phase 3B.R1: Dedicated Platform / Marketplace Partner Configuration
+  PAYPAL_PLATFORM_CLIENT_ID: z.string().trim().optional(),
+  PAYPAL_PLATFORM_CLIENT_SECRET: z.string().trim().optional(),
+  PAYPAL_PARTNER_MERCHANT_ID: z.string().trim().min(3).max(64).optional(),
+  PAYPAL_PARTNER_ATTRIBUTION_ID: z.string().trim().optional(),
+  PAYPAL_BN_CODE: z.string().trim().optional(),
+
+  // Phase 3B.R2.1: Explicit Server-Side Integration Mode (defaults to Model 1 Platform)
+  PAYPAL_PAYMENT_MODE: z.enum(["PLATFORM", "MERCHANT"]).default("PLATFORM"),
 });
 
 /**
@@ -33,7 +43,7 @@ const paypalEnvSchema = z.object({
  * - Server-only module guard prevents accidental bundling in client components.
  * - Restricts environment strictly to "sandbox"; fails immediately if production is specified.
  * - Enforces valid HTTPS Sandbox base URL.
- * - Requires PAYPAL_EXPECTED_MERCHANT_ID (no email fallback).
+ * - Requires PAYPAL_EXPECTED_MERCHANT_ID for legacy merchant checkout reference.
  * - Masks and excludes secrets from validation error messages.
  */
 export function getPayPalServerEnv(customSource?: Record<string, string | undefined>): PayPalConfig {
@@ -44,6 +54,12 @@ export function getPayPalServerEnv(customSource?: Record<string, string | undefi
     PAYPAL_CLIENT_SECRET: process.env.PAYPAL_CLIENT_SECRET,
     PAYPAL_EXPECTED_MERCHANT_ID: process.env.PAYPAL_EXPECTED_MERCHANT_ID,
     PAYPAL_WEBHOOK_ID: process.env.PAYPAL_WEBHOOK_ID,
+    PAYPAL_PLATFORM_CLIENT_ID: process.env.PAYPAL_PLATFORM_CLIENT_ID,
+    PAYPAL_PLATFORM_CLIENT_SECRET: process.env.PAYPAL_PLATFORM_CLIENT_SECRET,
+    PAYPAL_PARTNER_MERCHANT_ID: process.env.PAYPAL_PARTNER_MERCHANT_ID,
+    PAYPAL_PARTNER_ATTRIBUTION_ID: process.env.PAYPAL_PARTNER_ATTRIBUTION_ID,
+    PAYPAL_BN_CODE: process.env.PAYPAL_BN_CODE,
+    PAYPAL_PAYMENT_MODE: process.env.PAYPAL_PAYMENT_MODE,
   };
 
   const result = paypalEnvSchema.safeParse(source);
@@ -64,5 +80,10 @@ export function getPayPalServerEnv(customSource?: Record<string, string | undefi
     clientSecret: data.PAYPAL_CLIENT_SECRET,
     expectedMerchantId: data.PAYPAL_EXPECTED_MERCHANT_ID,
     webhookId: data.PAYPAL_WEBHOOK_ID,
+    platformClientId: data.PAYPAL_PLATFORM_CLIENT_ID || data.PAYPAL_CLIENT_ID,
+    platformClientSecret: data.PAYPAL_PLATFORM_CLIENT_SECRET || data.PAYPAL_CLIENT_SECRET,
+    partnerMerchantId: data.PAYPAL_PARTNER_MERCHANT_ID,
+    partnerAttributionId: data.PAYPAL_PARTNER_ATTRIBUTION_ID || data.PAYPAL_BN_CODE,
+    paymentMode: data.PAYPAL_PAYMENT_MODE,
   };
 }
