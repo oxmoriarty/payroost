@@ -54,7 +54,9 @@ export default async function PaymentOperationsPage() {
         <Card className="p-5">
           <p className="text-sm font-semibold text-ink-700">Total Intents</p>
           <p className="mt-3 font-display text-3xl text-ink-950">{summary.totalRecords}</p>
-          <p className="mt-1 text-xs text-ink-500">Tracked in database ledger</p>
+          <p className="mt-1 text-xs text-ink-500">
+            Platform: {summary.platformCount ?? 0} • Merchant: {summary.merchantCount ?? 0}
+          </p>
         </Card>
         <Card className="p-5">
           <p className="text-sm font-semibold text-ink-700">Confirmed Captures</p>
@@ -74,7 +76,10 @@ export default async function PaymentOperationsPage() {
           >
             {summary.reconciliationRequired}
           </p>
-          <p className="mt-1 text-xs text-ink-500">Ambiguous or timed-out orders</p>
+          <p className="mt-1 text-xs text-ink-500">
+            Expired leases: {summary.expiredLeases ?? 0} • Exhausted webhooks:{" "}
+            {summary.exhaustedWebhooks ?? 0}
+          </p>
         </Card>
         <Card className="p-5">
           <p className="text-sm font-semibold text-ink-700">In-Flight / Pending</p>

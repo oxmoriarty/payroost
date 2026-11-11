@@ -20,6 +20,10 @@ import {
   PAYPAL_AUTOMATED_RETRY_CUTOFF_MS,
   type PayPalOrderResponse,
 } from "@/app/api/public/portal/[token]/payments/orders/route";
+import { processVerifiedPayPalWebhookEvent } from "@/lib/paypal/webhook-processor";
+import { validatePayPalWebhookServerConfig } from "@/lib/paypal/payment-mode";
+import type { PayPalWebhookEnvelope } from "@/lib/paypal/webhooks";
+import { sanitizeOperationalText } from "@/features/payments/recovery-actions";
 
 const recoveryRequestSchema = z
   .object({
@@ -216,17 +220,60 @@ export async function POST(request: Request) {
 
         // 1. If capture was completed on PayPal, ledger is completed
         if (reconResult.success && reconResult.resultingStatus === "COMPLETED") {
+          try {
+            await logOperatorActivity({
+              serviceClient,
+              projectId: intent.project_id,
+              userId: user.id,
+              actorLabel: actor,
+              eventType: "payment.clear_expired_lease",
+              summary: `Operator triggered CLEAR_EXPIRED_LEASE on ${intent.id}; PayPal inquiry confirmed completed capture`,
+              metadata: {
+                intentId: intent.id,
+                action,
+                previousStatus: intent.status,
+                resultingStatus: "COMPLETED",
+                recovered: true,
+                notes: sanitizeOperationalText(notes, 300),
+              },
+            });
+          } catch {
+            return apiError("AUDIT_LOGGING_FAILED", 500);
+          }
+
           return NextResponse.json({
             success: true,
             action,
             previousStatus: intent.status,
             resultingStatus: "COMPLETED",
+            recovered: true,
             message: "Capture was already completed on provider; ledger successfully completed.",
           });
         }
 
         // 2. If recovered to ORDER_CREATED (e.g. APPROVED order reset), lease was already cleared
         if (reconResult.success && reconResult.resultingStatus === "ORDER_CREATED") {
+          try {
+            await logOperatorActivity({
+              serviceClient,
+              projectId: intent.project_id,
+              userId: user.id,
+              actorLabel: actor,
+              eventType: "payment.clear_expired_lease",
+              summary: `Operator triggered CLEAR_EXPIRED_LEASE on ${intent.id}; restored to ORDER_CREATED`,
+              metadata: {
+                intentId: intent.id,
+                action,
+                previousStatus: intent.status,
+                resultingStatus: "ORDER_CREATED",
+                recovered: true,
+                notes: sanitizeOperationalText(notes, 300),
+              },
+            });
+          } catch {
+            return apiError("AUDIT_LOGGING_FAILED", 500);
+          }
+
           return NextResponse.json({
             success: true,
             action,
@@ -239,6 +286,27 @@ export async function POST(request: Request) {
 
         // 3. If reconciliation transitioned intent to RECONCILIATION_REQUIRED, lease is already cleared
         if (reconResult.resultingStatus === "RECONCILIATION_REQUIRED") {
+          try {
+            await logOperatorActivity({
+              serviceClient,
+              projectId: intent.project_id,
+              userId: user.id,
+              actorLabel: actor,
+              eventType: "payment.clear_expired_lease",
+              summary: `Operator triggered CLEAR_EXPIRED_LEASE on ${intent.id}; moved to RECONCILIATION_REQUIRED`,
+              metadata: {
+                intentId: intent.id,
+                action,
+                previousStatus: intent.status,
+                resultingStatus: "RECONCILIATION_REQUIRED",
+                reasonCode: reconResult.reason || "RECONCILIATION_REQUIRED",
+                notes: sanitizeOperationalText(notes, 300),
+              },
+            });
+          } catch {
+            return apiError("AUDIT_LOGGING_FAILED", 500);
+          }
+
           return NextResponse.json({
             success: true,
             action,
@@ -503,7 +571,9 @@ export async function POST(request: Request) {
 
       const { data: webhookEvent, error: whError } = await serviceClient
         .from("provider_webhook_events")
-        .select("id, provider_event_id, event_type, resource_type, resource_id, payment_intent_id, status, processing_outcome, payload, signature_verified, lease_expires_at")
+        .select(
+          "id, provider_event_id, event_type, resource_type, resource_id, payment_intent_id, payload_sha256, status, processing_outcome, payload, event_created_at, signature_verified, lease_expires_at, attempt_count, sanitized_metadata"
+        )
         .eq("id", webhookEventId)
         .maybeSingle();
 
@@ -511,14 +581,8 @@ export async function POST(request: Request) {
         return apiError("WEBHOOK_EVENT_NOT_FOUND", 404);
       }
 
-      // 1. Signature-Verification Boundary (Fail-Closed)
-      // Reprocessing is strictly unavailable for unverified events
-      const isSignatureVerified =
-        webhookEvent.signature_verified === true ||
-        (webhookEvent.payload as Record<string, unknown> | null)?.signature_verified === true ||
-        (webhookEvent.payload as Record<string, unknown> | null)?.verification_status === "SUCCESS";
-
-      if (!isSignatureVerified) {
+      // 1. Signature-Verification Boundary (Fail-Closed): strictly require verified DB flag
+      if (webhookEvent.signature_verified !== true) {
         return apiError("UNVERIFIED_WEBHOOK_EVENT", 422);
       }
 
@@ -608,7 +672,118 @@ export async function POST(request: Request) {
         return apiError("WEBHOOK_INTENT_MISMATCH", 403);
       }
 
-      // 5. Reconcile associated payment intent
+      const hasExpiredCaptureLease = Boolean(
+        intent.status === "CAPTURING" &&
+          intent.capture_lease_expires_at &&
+          new Date(intent.capture_lease_expires_at).getTime() <= now
+      );
+      const isReconcileEligible =
+        intent.status === "RECONCILIATION_REQUIRED" ||
+        intent.status === "ORDER_CREATING" ||
+        hasExpiredCaptureLease;
+
+      const payloadSha256 = (webhookEvent as { payload_sha256?: string | null }).payload_sha256;
+      const hasFullReplayEnvelope = Boolean(
+        typeof payloadSha256 === "string" &&
+          payloadSha256.length > 0 &&
+          typeof payload.id === "string" &&
+          typeof payload.event_type === "string"
+      );
+
+      // 5A. For ORDER_CREATED / BUYER_APPROVED / COMPLETED / FAILED intents with full R4 webhook records,
+      // replay cleanly through the verified webhook processor (authoritative PayPal API lookup + DB RPCs)
+      if (!isReconcileEligible && hasFullReplayEnvelope) {
+        let paypalEnv: ReturnType<typeof getPayPalServerEnv>;
+        try {
+          paypalEnv = getPayPalServerEnv();
+        } catch {
+          return apiError("PAYPAL_CONFIGURATION_INVALID", 500);
+        }
+
+        const whCfg = validatePayPalWebhookServerConfig(paypalEnv);
+        if (!whCfg.valid) {
+          return apiError("PAYPAL_WEBHOOK_NOT_CONFIGURED", 500);
+        }
+
+        const { data: claimData, error: claimError } = await serviceClient.rpc(
+          "claim_paypal_webhook_event",
+          {
+            p_provider_event_id: String(webhookEvent.provider_event_id || payload.id),
+            p_event_type: String(webhookEvent.event_type || payload.event_type),
+            p_resource_type:
+              (webhookEvent as { resource_type?: string | null }).resource_type ??
+              payload.resource_type ??
+              null,
+            p_resource_id: resourceId ?? null,
+            p_payload_sha256: payloadSha256,
+            p_sanitized_payload: payload,
+            p_sanitized_metadata:
+              (webhookEvent as { sanitized_metadata?: Record<string, unknown> | null })
+                .sanitized_metadata ?? {},
+            p_event_created_at:
+              (webhookEvent as { event_created_at?: string | null }).event_created_at ?? null,
+            p_signature_verified: true,
+            p_lease_seconds: 60,
+            p_max_attempts: 8,
+            p_allow_reprocess: true,
+            p_respect_backoff: false,
+          }
+        );
+
+        const claim = claimData as { claimed?: boolean; event_row_id?: string } | null;
+        if (claimError || !claim?.claimed || !claim.event_row_id) {
+          return apiError("WEBHOOK_CLAIM_FAILED", 409);
+        }
+
+        const paypalClient = new PayPalClient(paypalEnv);
+        const outcomeResult = await processVerifiedPayPalWebhookEvent({
+          serviceClient,
+          paypalClient,
+          paypalEnv,
+          envelope: payload as unknown as PayPalWebhookEnvelope,
+          eventRowId: claim.event_row_id,
+          eventCreatedAt:
+            (webhookEvent as { event_created_at?: string | null }).event_created_at ?? null,
+        });
+
+        try {
+          await logOperatorActivity({
+            serviceClient,
+            projectId: intent.project_id,
+            userId: user.id,
+            actorLabel: actor,
+            eventType: "payment.webhook_reprocessed",
+            summary: `Operator reprocessed verified PayPal webhook ${String(webhookEvent.provider_event_id || webhookEvent.id)} (${String(outcomeResult.body.outcome || "UNKNOWN")})`,
+            metadata: {
+              intentId: intent.id,
+              action,
+              webhookEventId: webhookEvent.id,
+              previousStatus: intent.status,
+              resultingOutcome: outcomeResult.body.outcome ?? null,
+              notes: sanitizeOperationalText(notes, 300),
+            },
+          });
+        } catch {
+          return apiError("AUDIT_LOGGING_FAILED", 500);
+        }
+
+        const succeeded =
+          outcomeResult.body.outcome === "PROCESSED" ||
+          outcomeResult.body.outcome === "DUPLICATE";
+        return NextResponse.json(
+          {
+            success: succeeded,
+            action,
+            previousStatus: intent.status,
+            resultingStatus: outcomeResult.body.outcome ?? intent.status,
+            webhookEventId: webhookEvent.id,
+            error: succeeded ? undefined : outcomeResult.body.error || "WEBHOOK_REPROCESS_INCONCLUSIVE",
+          },
+          { status: succeeded ? 200 : outcomeResult.httpStatus === 503 ? 503 : 409 }
+        );
+      }
+
+      // 5B. Reconcile associated payment intent via R3 authoritative reconciliation service
       const reconResult = await reconcilePaymentIntentServerSide({
         intentId: intent.id,
         actorLabel: actor,
