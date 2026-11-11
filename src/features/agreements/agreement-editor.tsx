@@ -1,11 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bot, Copy, Eye, FilePlus2, Plus, Send, Trash2 } from "lucide-react";
+import { Bot, Copy, Eye, FilePlus2, History, Lock, Plus, Send, Trash2 } from "lucide-react";
+import {
+  AgreementDocumentView,
+  type AgreementContentLike,
+} from "@/features/agreements/agreement-document-view";
 import { agreementDraftSchema, type AgreementDraft } from "@/features/agreements/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatMoney } from "@/lib/utils";
 
 type Version = { id: string; version_number: number; content: unknown; status: string; created_at: string; sent_at: string | null; approved_at: string | null };
 
@@ -94,22 +99,76 @@ export function AgreementEditor({
   isClientVerified?: boolean;
   clientEmail?: string;
 }) {
-  const draftVersion = versions.find((version) => version.status === "DRAFT") ?? null;
+  const [localVersions, setLocalVersions] = useState<Version[]>(versions);
+  const draftVersion = useMemo(
+    () => localVersions.find((version) => version.status === "DRAFT") ?? null,
+    [localVersions],
+  );
   const initial = useMemo(() => getDraft(draftVersion), [draftVersion]);
   const [draft, setDraft] = useState<AgreementDraft | null>(initial);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    () => draftVersion?.id ?? versions[0]?.id ?? null,
+  );
   const [isPreviewDraft, setIsPreviewDraft] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
 
-  function setValue<K extends keyof AgreementDraft>(key: K, value: AgreementDraft[K]) { if (draft) setDraft({ ...draft, [key]: value }); }
-  async function request(path: string, body: unknown) { const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await response.json() as { data?: unknown; error?: string; reviewUrl?: string }; if (!response.ok) throw new Error(json.error ?? "Request failed"); return json; }
-  async function createManual() { setBusy(true); setNotice(null); try { const json = await request(`/api/projects/${projectId}/agreement`, { action: "CREATE_MANUAL" }); setNotice("Draft created. Refresh the page to load it into the editor."); if (json.data) window.location.reload(); } catch (error) { setNotice(error instanceof Error ? error.message : "Unable to create a draft."); } finally { setBusy(false); } }
+  const selectedVersion =
+    localVersions.find((v) => v.id === selectedVersionId) ??
+    draftVersion ??
+    localVersions[0] ??
+    null;
+
+  const isViewingEditableDraft =
+    draft !== null &&
+    (isPreviewDraft ||
+      (draftVersion !== null && (selectedVersionId === null || selectedVersionId === draftVersion.id)));
+
+  const nextVersionNumber =
+    localVersions.reduce((max, v) => Math.max(max, v.version_number), 0) + 1;
+
+  function statusTone(status: string): "success" | "warning" | "info" | "neutral" {
+    if (status === "APPROVED") return "success";
+    if (status === "CHANGES_REQUESTED") return "warning";
+    if (status === "PENDING_CLIENT" || status === "DRAFT") return "info";
+    return "neutral";
+  }
+
+  function setValue<K extends keyof AgreementDraft>(key: K, value: AgreementDraft[K]) {
+    if (draft) setDraft({ ...draft, [key]: value });
+  }
+
+  async function request(path: string, body: unknown) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = (await response.json()) as { data?: { id?: string; version_number?: number }; error?: string; reviewUrl?: string };
+    if (!response.ok) throw new Error(json.error ?? "Request failed");
+    return json;
+  }
+
+  async function createManual() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const json = await request(`/api/projects/${projectId}/agreement`, { action: "CREATE_MANUAL" });
+      setNotice("Draft created. Refresh the page to load it into the editor.");
+      if (json.data && typeof window !== "undefined") window.location.reload();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to create a draft.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generate() {
     setBusy(true);
     setNotice(null);
     try {
-      const json = await request("/api/ai/generate-agreement", { projectId }) as {
+      const json = (await request("/api/ai/generate-agreement", { projectId })) as {
         data?: { draft?: AgreementDraft; preview?: boolean };
       };
       if (json.data?.draft) {
@@ -125,15 +184,44 @@ export function AgreementEditor({
       setBusy(false);
     }
   }
+
+  async function saveDraftContent(contentToSave: AgreementDraft, source: "MANUAL" | "AI_ASSISTED") {
+    const json = await request(`/api/projects/${projectId}/agreement`, {
+      content: contentToSave,
+      source,
+    });
+
+    if (json.data?.id && typeof json.data.version_number === "number") {
+      const savedId = json.data.id;
+      const savedNumber = json.data.version_number;
+      setLocalVersions((prev) => {
+        const exists = prev.some((v) => v.id === savedId);
+        if (exists) {
+          return prev.map((v) =>
+            v.id === savedId ? { ...v, content: contentToSave, status: "DRAFT" } : v,
+          );
+        }
+        const newVersion: Version = {
+          id: savedId,
+          version_number: savedNumber,
+          content: contentToSave,
+          status: "DRAFT",
+          created_at: new Date().toISOString(),
+          sent_at: null,
+          approved_at: null,
+        };
+        return [newVersion, ...prev];
+      });
+      setSelectedVersionId(savedId);
+    }
+  }
+
   async function save() {
     if (!draft) return;
     setBusy(true);
     setNotice(null);
     try {
-      await request(`/api/projects/${projectId}/agreement`, {
-        content: draft,
-        source: isPreviewDraft ? "AI_ASSISTED" : "MANUAL",
-      });
+      await saveDraftContent(draft, isPreviewDraft ? "AI_ASSISTED" : "MANUAL");
       setIsPreviewDraft(false);
       setNotice("Draft saved successfully.");
     } catch (error) {
@@ -142,6 +230,29 @@ export function AgreementEditor({
       setBusy(false);
     }
   }
+
+  async function createRevisionFromVersion(baseVersion: Version) {
+    const parsedBase = getDraft(baseVersion);
+    if (!parsedBase) {
+      setNotice("This version cannot be cloned cleanly into a draft. Use 'Propose new revision with AI' or start a manual draft.");
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const cloned: AgreementDraft = JSON.parse(JSON.stringify(parsedBase)) as AgreementDraft;
+      await saveDraftContent(cloned, "MANUAL");
+      setDraft(cloned);
+      setIsPreviewDraft(false);
+      setReviewUrl(null);
+      setNotice(`Draft revision created from Version ${baseVersion.version_number}. Edit the terms and send when ready.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to create a new draft revision.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendForReview() {
     if (!draft) return;
     if (!isClientVerified) {
@@ -151,8 +262,20 @@ export function AgreementEditor({
     setBusy(true);
     setNotice(null);
     try {
-      await save();
+      await saveDraftContent(draft, isPreviewDraft ? "AI_ASSISTED" : "MANUAL");
+      setIsPreviewDraft(false);
       const json = await request(`/api/projects/${projectId}/review-link`, { expiresInDays: 14 });
+      const activeDraftId = draftVersion?.id ?? selectedVersionId;
+      if (activeDraftId) {
+        setLocalVersions((prev) =>
+          prev.map((v) =>
+            v.id === activeDraftId
+              ? { ...v, status: "PENDING_CLIENT", sent_at: new Date().toISOString() }
+              : v,
+          ),
+        );
+      }
+      setDraft(null);
       setReviewUrl(json.reviewUrl ?? null);
       setNotice("Agreement sent for review. Copy the secure link below.");
     } catch (error) {
@@ -162,7 +285,164 @@ export function AgreementEditor({
     }
   }
 
-  if (!draft) return <Card className="p-6"><p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Agreement</p><h2 className="mt-2 font-display text-2xl text-ink-950">Start with a reviewable draft.</h2><p className="mt-3 max-w-xl text-ink-700">You can begin with a manual structured draft. {canUseAi ? "Gemini can also suggest an editable draft from the project brief." : "Gemini is not configured, so manual drafting is available."}</p>{notice && <Notice message={notice} />}<div className="mt-6 flex flex-wrap gap-3"><Button disabled={busy} onClick={createManual}><FilePlus2 className="mr-2" size={16} />Create manual draft</Button>{canUseAi && <Button disabled={busy} onClick={generate} variant="secondary"><Bot className="mr-2" size={16} />Generate with AI</Button>}</div></Card>;
+  if (localVersions.length === 0 && !draft) {
+    return (
+      <Card className="p-6">
+        <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Agreement</p>
+        <h2 className="mt-2 font-display text-2xl text-ink-950">Start with a reviewable draft.</h2>
+        <p className="mt-3 max-w-xl text-ink-700">
+          You can begin with a manual structured draft.{" "}
+          {canUseAi
+            ? "Gemini can also suggest an editable draft from the project brief."
+            : "Gemini is not configured, so manual drafting is available."}
+        </p>
+        {notice && <Notice message={notice} />}
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button disabled={busy} onClick={createManual}>
+            <FilePlus2 className="mr-2" size={16} />
+            Create manual draft
+          </Button>
+          {canUseAi && (
+            <Button disabled={busy} onClick={generate} variant="secondary">
+              <Bot className="mr-2" size={16} />
+              Generate with AI
+            </Button>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  if (!isViewingEditableDraft && selectedVersion) {
+    const selectedStatus = selectedVersion.status;
+    return (
+      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card className="p-5 sm:p-7 space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">
+                Agreement version
+              </p>
+              <h2 className="mt-1 font-display text-2xl text-ink-950">
+                Version {selectedVersion.version_number}
+              </h2>
+              {selectedVersion.approved_at && (
+                <p className="mt-1 text-xs text-emerald-800">
+                  Approved on {new Date(selectedVersion.approved_at).toLocaleString()}
+                </p>
+              )}
+              {selectedVersion.sent_at && selectedStatus === "PENDING_CLIENT" && (
+                <p className="mt-1 text-xs text-ink-600">
+                  Sent for client review on {new Date(selectedVersion.sent_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={statusTone(selectedStatus)}>
+                <Lock className="mr-1 h-3 w-3" />
+                {selectedStatus.replaceAll("_", " ")}
+              </Badge>
+            </div>
+          </div>
+
+          {selectedStatus === "CHANGES_REQUESTED" && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <p className="font-semibold">Client requested revisions on Version {selectedVersion.version_number}</p>
+              <p className="mt-1 text-xs text-amber-900">
+                Review the client&apos;s notes in Activity History below, then create Version {nextVersionNumber} as a new draft to adjust scope, timelines, or milestones.
+              </p>
+            </div>
+          )}
+
+          {selectedStatus === "APPROVED" && !draftVersion && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-950">
+              <p className="font-semibold">Locked Agreement Baseline</p>
+              <p className="mt-1 text-xs text-emerald-900">
+                This version was approved by the client and governs current milestones. Creating a new draft revision keeps this approved baseline intact until the client approves the newer version.
+              </p>
+            </div>
+          )}
+
+          {notice && <Notice message={notice} />}
+
+          {reviewUrl && (
+            <div className="rounded-xl border border-teal-600/20 bg-teal-50 p-4">
+              <p className="text-sm font-semibold text-teal-800">Secure review link — share it privately</p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  aria-label="Secure agreement review link"
+                  className="min-w-0 flex-1 rounded-lg border border-teal-600/20 bg-white p-2 text-xs"
+                  readOnly
+                  value={reviewUrl}
+                />
+                <Button
+                  aria-label="Copy review link"
+                  onClick={() => navigator.clipboard.writeText(reviewUrl)}
+                  variant="secondary"
+                >
+                  <Copy size={16} />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            {draftVersion ? (
+              <Button
+                onClick={() => {
+                  setDraft(getDraft(draftVersion));
+                  setSelectedVersionId(draftVersion.id);
+                  setIsPreviewDraft(false);
+                }}
+                type="button"
+              >
+                Return to active draft (v{draftVersion.version_number})
+              </Button>
+            ) : (
+              <>
+                <Button
+                  disabled={busy}
+                  onClick={() => createRevisionFromVersion(selectedVersion)}
+                  type="button"
+                >
+                  <FilePlus2 className="mr-2" size={16} />
+                  Create draft revision (v{nextVersionNumber})
+                </Button>
+                {canUseAi && (
+                  <Button disabled={busy} onClick={generate} type="button" variant="secondary">
+                    <Bot className="mr-2" size={16} />
+                    Propose v{nextVersionNumber} with AI
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+
+          <AgreementDocumentView
+            content={selectedVersion.content as AgreementContentLike}
+          />
+        </Card>
+
+        <aside className="space-y-5">
+          <VersionHistoryCard
+            draftVersionId={draftVersion?.id ?? null}
+            onSelectVersion={(version) => {
+              setSelectedVersionId(version.id);
+              if (version.status === "DRAFT") {
+                setDraft(getDraft(version));
+                setIsPreviewDraft(false);
+              }
+            }}
+            selectedVersionId={selectedVersion.id}
+            statusTone={statusTone}
+            versions={localVersions}
+          />
+        </aside>
+      </div>
+    );
+  }
+
+  if (!draft) return null;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
@@ -435,7 +715,9 @@ export function AgreementEditor({
             {draft.milestones.map((m, idx) => (
               <div className="flex justify-between border-l-2 border-teal-600/30 pl-2 text-sm text-ink-700" key={m.id || idx}>
                 <span>{m.title || `Milestone ${idx + 1}`}</span>
-                <span className="font-medium text-ink-900">{m.amountMinor.toLocaleString()} {m.currency}</span>
+                <span className="font-medium text-ink-900">
+                  {formatMoneySafe(m.amountMinor, m.currency)}
+                </span>
               </div>
             ))}
           </div>
@@ -443,27 +725,93 @@ export function AgreementEditor({
           <div className="mt-4 flex justify-between border-t border-ink-100 pt-3 text-sm font-bold text-ink-900">
             <span>Total allocation:</span>
             <span>
-              {draft.milestones.reduce((acc, m) => acc + m.amountMinor, 0).toLocaleString()} {draft.milestones[0]?.currency ?? ""}
+              {formatMoneySafe(
+                draft.milestones.reduce((acc, m) => acc + m.amountMinor, 0),
+                draft.milestones[0]?.currency ?? "USD",
+              )}
             </span>
           </div>
         </Card>
 
-        <Card className="p-5">
-          <h3 className="font-display text-xl">Version history</h3>
-          <ol className="mt-4 space-y-3">
-            {versions.map((version) => (
-              <li className="border-l-2 border-ink-200 pl-3" key={version.id}>
-                <p className="text-sm font-bold">
-                  Version {version.version_number}{" "}
-                  <span className="font-normal text-ink-700">· {version.status.replaceAll("_", " ")}</span>
-                </p>
-                <p className="mt-1 text-xs text-ink-700">{new Date(version.created_at).toLocaleString()}</p>
-              </li>
-            ))}
-          </ol>
-        </Card>
+        {localVersions.length > 0 && (
+          <VersionHistoryCard
+            draftVersionId={draftVersion?.id ?? null}
+            onSelectVersion={(version) => {
+              setSelectedVersionId(version.id);
+              if (version.status === "DRAFT") {
+                setDraft(getDraft(version));
+                setIsPreviewDraft(false);
+              }
+            }}
+            selectedVersionId={selectedVersion?.id ?? null}
+            statusTone={statusTone}
+            versions={localVersions}
+          />
+        )}
       </aside>
     </div>
+  );
+}
+
+function formatMoneySafe(amountMinor: number, currency: string) {
+  try {
+    return formatMoney(amountMinor, currency);
+  } catch {
+    return `${amountMinor.toLocaleString()} ${currency}`;
+  }
+}
+
+function VersionHistoryCard({
+  versions,
+  selectedVersionId,
+  draftVersionId,
+  statusTone,
+  onSelectVersion,
+}: {
+  versions: Version[];
+  selectedVersionId: string | null;
+  draftVersionId: string | null;
+  statusTone: (status: string) => "success" | "warning" | "info" | "neutral";
+  onSelectVersion: (version: Version) => void;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center gap-2">
+        <History className="text-teal-700" size={18} />
+        <h3 className="font-display text-xl">Version history</h3>
+      </div>
+      <ol className="mt-4 space-y-2.5">
+        {versions.map((version) => {
+          const isSelected = version.id === selectedVersionId;
+          return (
+            <li key={version.id}>
+              <button
+                className={`w-full rounded-xl border p-3 text-left transition ${
+                  isSelected
+                    ? "border-teal-600/50 bg-teal-50/50"
+                    : "border-ink-100 bg-white hover:border-ink-200 hover:bg-ink-50/50"
+                }`}
+                onClick={() => onSelectVersion(version)}
+                type="button"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-ink-950">
+                    Version {version.version_number}
+                    {version.id === draftVersionId ? " (Editable)" : ""}
+                  </span>
+                  <Badge tone={statusTone(version.status)}>
+                    {version.status.replaceAll("_", " ")}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-ink-600">
+                  Created {new Date(version.created_at).toLocaleString()}
+                </p>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
 

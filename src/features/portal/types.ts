@@ -1,3 +1,4 @@
+import type { AgreementContentLike } from "@/features/agreements/agreement-document-view";
 import type { ChangeRequest } from "@/features/projects/types";
 
 export interface PortalMilestone {
@@ -5,6 +6,7 @@ export interface PortalMilestone {
   title: string;
   description: string;
   deliverables: string[];
+  acceptanceCriteria?: string[];
   amountMinor: number;
   currency: string;
   dueDate: string | null;
@@ -15,6 +17,26 @@ export interface PortalMilestone {
   paymentIntentId?: string | null;
   providerOrderId?: string | null;
   completedCaptureId?: string | null;
+  latestSubmissionNote?: string | null;
+  latestDeliverableUrl?: string | null;
+  latestFeedbackNote?: string | null;
+}
+
+export interface PortalAgreementVersionSummary {
+  id: string;
+  versionNumber: number;
+  status: string;
+  createdAt: string;
+  approvedAt: string | null;
+  content: AgreementContentLike | null;
+}
+
+export interface PortalActivityItem {
+  id: string;
+  actorLabel: string;
+  eventType: string;
+  summary: string;
+  createdAt: string;
 }
 
 export interface PortalProjectData {
@@ -26,13 +48,19 @@ export interface PortalProjectData {
   currency: string;
   totalAmountMinor: number;
   projectStatus: string;
+  startDate?: string | null;
+  targetEndDate?: string | null;
   agreementStatus: string;
   agreementVersionId?: string | null;
   agreementVersionNumber?: number;
   scopeBaselineVersionNumber?: number | null;
   scopeBaselineStatus?: string | null;
+  agreementContent?: AgreementContentLike | null;
+  agreementApprovedAt?: string | null;
+  agreementVersionHistory?: PortalAgreementVersionSummary[];
   canUseAi?: boolean;
   changeRequests?: ChangeRequest[];
+  activities?: PortalActivityItem[];
   milestones: PortalMilestone[];
 }
 

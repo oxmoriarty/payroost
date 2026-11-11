@@ -258,7 +258,7 @@ export function renderPortalInvitationEmail(params: {
     <p style="font-size: 13px; color: #64748b;">This link will expire in ${expiresInDays} days. If the button above does not work, copy and paste this link into your browser:</p>
     <p style="font-size: 12px; word-break: break-all; color: #0f766e;">${safePortalUrl}</p>
     <div class="footer">
-      Payroost — Verified freelance workflows and payment escrow.<br>
+      Payroost — Verified freelance agreements, milestone tracking, and payment coordination.<br>
       If you did not anticipate this email, you may safely disregard this message.
     </div>
   </div>

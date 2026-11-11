@@ -1,16 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, AlertTriangle, ShieldCheck } from "lucide-react";
-import { getProjectWorkspace } from "@/features/projects/data";
+import { ArrowLeft, AlertTriangle, Calendar, CheckCircle2, ShieldCheck } from "lucide-react";
+import {
+  getProjectMilestonePaymentStates,
+  getProjectWorkspace,
+} from "@/features/projects/data";
 import { AgreementEditor } from "@/features/agreements/agreement-editor";
 import { agreementDraftSchema } from "@/features/agreements/schema";
+import { extractMilestoneNotes } from "@/features/milestones/activity-notes";
 import { MilestonePlanner } from "@/features/milestones/milestone-planner";
+import { MilestoneWorkspacePanel } from "@/features/milestones/milestone-workspace-panel";
+import { syncApprovedAgreementMilestones } from "@/features/milestones/sync";
 import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { ProjectAssistantPanel } from "@/features/assistant/project-assistant-panel";
+import { PortalInviteCard } from "@/features/projects/portal-invite-card";
 import { ResendVerificationButton } from "@/features/projects/resend-verification-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProjectWorkspacePage({
   params,
@@ -18,13 +28,46 @@ export default async function ProjectWorkspacePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await contextParams(params);
-  const workspace = await getProjectWorkspace(projectId);
+  let workspace = await getProjectWorkspace(projectId);
 
   if (!workspace) {
     notFound();
   }
 
+  // Catch-up idempotent sync if agreement is approved while milestones remain DRAFT or empty
+  const hasApprovedVersion = workspace.versions.some((v) => v.status === "APPROVED");
+  const needsMilestoneSync =
+    hasApprovedVersion &&
+    (workspace.milestones.length === 0 || workspace.milestones.some((m) => m.status === "DRAFT"));
+
+  if (needsMilestoneSync) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const syncResult = await syncApprovedAgreementMilestones({
+        supabase,
+        projectId: workspace.project.id,
+        actorUserId: user?.id ?? null,
+        actorLabel: "System catch-up",
+      });
+      if (syncResult.promotedCount > 0 || syncResult.insertedCount > 0) {
+        const refreshed = await getProjectWorkspace(projectId);
+        if (refreshed) workspace = refreshed;
+      }
+    } catch {
+      // Non-fatal: manual sync control remains available in UI
+    }
+  }
+
   const { project, agreement, versions, milestones, activities, changeRequests } = workspace;
+  const paymentStates = await getProjectMilestonePaymentStates(
+    project.id,
+    milestones.map((m) => m.id),
+  );
+  const milestoneNotes = extractMilestoneNotes(activities);
+
   const isClientVerified = Boolean(project.client_email_verified_at);
   const canUseAi = Boolean(process.env.GEMINI_API_KEY);
   const currentVersion =
@@ -39,6 +82,25 @@ export default async function ProjectWorkspacePage({
     ? agreementDraftSchema.safeParse(draftVersion.content)
     : null;
   const agreementEditorKey = `${agreement?.current_version_id ?? "none"}-${versions[0]?.updated_at ?? "none"}-${milestones.length}`;
+
+  const workflowSteps = [
+    {
+      label: "Client verified",
+      done: isClientVerified,
+    },
+    {
+      label: "Agreement drafted",
+      done: versions.length > 0,
+    },
+    {
+      label: "Agreement approved",
+      done: Boolean(approvedVersion),
+    },
+    {
+      label: "Deliverables accepted",
+      done: milestones.length > 0 && milestones.every((m) => m.status === "ACCEPTED"),
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -102,6 +164,68 @@ export default async function ProjectWorkspacePage({
         </div>
       </Card>
 
+      {/* Project Workflow Progress & Brief Summary */}
+      <Card className="p-5 sm:p-6 space-y-5">
+        <div className="grid gap-2 sm:grid-cols-4">
+          {workflowSteps.map((step, idx) => (
+            <div
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                step.done
+                  ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+                  : "border-ink-100 bg-ink-50/60 text-ink-600"
+              }`}
+              key={step.label}
+            >
+              {step.done ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
+              ) : (
+                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-ink-300 text-[10px]">
+                  {idx + 1}
+                </span>
+              )}
+              <span>{step.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-ink-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-600">
+            <span className="font-bold uppercase tracking-wider text-ink-700">Project Brief</span>
+            {(project.start_date || project.target_end_date) && (
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                {project.start_date ? `Start ${new Date(project.start_date).toLocaleDateString()}` : "Flexible start"}
+                {" · "}
+                {project.target_end_date
+                  ? `Target ${new Date(project.target_end_date).toLocaleDateString()}`
+                  : "No target date"}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-800">
+            {project.brief}
+          </p>
+        </div>
+      </Card>
+
+      {/* Client Workspace Portal Invite (verified client access) */}
+      <PortalInviteCard
+        agreementApproved={Boolean(approvedVersion)}
+        clientEmail={project.client_email}
+        clientName={project.client_name}
+        isClientVerified={isClientVerified}
+        projectId={project.id}
+      />
+
+      {/* Active Milestone Execution & Deliverable Submissions */}
+      <MilestoneWorkspacePanel
+        agreementApproved={Boolean(approvedVersion)}
+        initialNotes={milestoneNotes}
+        milestones={milestones}
+        paymentStates={paymentStates}
+        projectId={project.id}
+      />
+
       {/* Standalone Milestone Planner (AI-4) */}
       <MilestonePlanner
         projectId={project.id}
@@ -120,27 +244,31 @@ export default async function ProjectWorkspacePage({
       />
 
       {/* Agreement Editor with Verification Guard */}
-      <AgreementEditor
-        key={agreementEditorKey}
-        projectId={project.id}
-        versions={versions}
-        canUseAi={canUseAi}
-        isClientVerified={isClientVerified}
-        clientEmail={project.client_email}
-      />
+      <div id="agreement">
+        <AgreementEditor
+          key={agreementEditorKey}
+          projectId={project.id}
+          versions={versions}
+          canUseAi={canUseAi}
+          isClientVerified={isClientVerified}
+          clientEmail={project.client_email}
+        />
+      </div>
 
       {/* Intelligent Scope-Change Analysis & Change Requests (AI-5) */}
-      <ScopeChangePanel
-        mode="freelancer"
-        projectId={project.id}
-        projectCurrency={project.currency}
-        confirmedBudgetMinor={project.total_amount_minor}
-        agreementVersionId={scopeBaselineVersion?.id ?? null}
-        agreementVersionNumber={scopeBaselineVersion?.version_number ?? null}
-        agreementStatus={scopeBaselineVersion?.status ?? agreement?.status ?? null}
-        canUseAi={canUseAi}
-        initialChangeRequests={changeRequests}
-      />
+      <div id="scope-changes">
+        <ScopeChangePanel
+          mode="freelancer"
+          projectId={project.id}
+          projectCurrency={project.currency}
+          confirmedBudgetMinor={project.total_amount_minor}
+          agreementVersionId={scopeBaselineVersion?.id ?? null}
+          agreementVersionNumber={scopeBaselineVersion?.version_number ?? null}
+          agreementStatus={scopeBaselineVersion?.status ?? agreement?.status ?? null}
+          canUseAi={canUseAi}
+          initialChangeRequests={changeRequests}
+        />
+      </div>
 
       {/* Context-Aware Read-Only Project Assistant (AI-6) */}
       <ProjectAssistantPanel

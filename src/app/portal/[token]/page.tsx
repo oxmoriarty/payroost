@@ -6,9 +6,14 @@ import { hashPortalToken } from "@/lib/security/tokens";
 import { authenticatePortalSession } from "@/lib/security/portal-session";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { type AgreementContentLike } from "@/features/agreements/agreement-document-view";
+import { extractMilestoneNotes } from "@/features/milestones/activity-notes";
+import { syncApprovedAgreementMilestones } from "@/features/milestones/sync";
 import { ClientPortalEntryView } from "@/features/portal/client-portal-entry-view";
 import { ClientPortalWorkspaceView } from "@/features/portal/client-portal-workspace-view";
 import type {
+  PortalActivityItem,
+  PortalAgreementVersionSummary,
   PortalMilestone,
   PortalPaymentReturnContext,
   PortalProjectData,
@@ -133,7 +138,9 @@ export default async function ClientPortalPage({
       brief,
       currency,
       total_amount_minor,
-      status
+      status,
+      start_date,
+      target_end_date
     `)
     .eq("id", boundProjectId)
     .maybeSingle();
@@ -142,7 +149,7 @@ export default async function ClientPortalPage({
     return renderUnavailablePortal("Project data could not be retrieved.");
   }
 
-  // 7. Query agreement and agreement version for boundProjectId
+  // 7. Query agreement and all agreement versions for boundProjectId
   const { data: agreement, error: agreementError } = await serviceClient
     .from("agreements")
     .select("id, status, current_version_id")
@@ -160,76 +167,134 @@ export default async function ClientPortalPage({
   let scopeBaselineVersionNumber: number | null = null;
   let scopeBaselineStatus: string | null = agreement?.status ?? null;
   let isAgreementApproved = false;
+  let agreementContent: AgreementContentLike | null = null;
+  let agreementApprovedAt: string | null = null;
+  let agreementVersionHistory: PortalAgreementVersionSummary[] = [];
 
-  if (agreement?.current_version_id) {
-    const { data: version, error: versionError } = await serviceClient
+  if (agreement?.id) {
+    const { data: allVersions, error: versionsError } = await serviceClient
       .from("agreement_versions")
-      .select("id, version_number, status")
-      .eq("id", agreement.current_version_id)
-      .maybeSingle();
+      .select("id, version_number, status, content, created_at, approved_at")
+      .eq("agreement_id", agreement.id)
+      .order("version_number", { ascending: false });
 
-    if (versionError) {
+    if (versionsError) {
       return renderUnavailablePortal("Agreement version data could not be retrieved.");
     }
 
-    if (version) {
-      agreementVersionId = version.id;
-      scopeBaselineVersionId = version.id;
-      scopeBaselineVersionNumber = version.version_number;
-      scopeBaselineStatus = version.status;
-      agreementVersionNumber = version.version_number;
-      isAgreementApproved = version.status === "APPROVED";
-      if (isAgreementApproved) {
+    const typedVersions = (allVersions ?? []) as Array<{
+      id: string;
+      version_number: number;
+      status: string;
+      content: AgreementContentLike | null;
+      created_at: string;
+      approved_at: string | null;
+    }>;
+
+    agreementVersionHistory = typedVersions.map((v) => ({
+      id: v.id,
+      versionNumber: v.version_number,
+      status: v.status,
+      createdAt: v.created_at,
+      approvedAt: v.approved_at,
+      content: v.content ?? null,
+    }));
+
+    const currentVersion =
+      typedVersions.find((v) => v.id === agreement.current_version_id) ?? typedVersions[0] ?? null;
+    const latestApprovedVersion = typedVersions.find((v) => v.status === "APPROVED") ?? null;
+
+    if (currentVersion) {
+      agreementVersionId = currentVersion.id;
+      agreementVersionNumber = currentVersion.version_number;
+      agreementStatus = currentVersion.status;
+      agreementContent = currentVersion.content ?? null;
+      agreementApprovedAt = currentVersion.approved_at;
+    }
+
+    const activeBaseline = latestApprovedVersion ?? currentVersion;
+    if (activeBaseline) {
+      scopeBaselineVersionId = activeBaseline.id;
+      scopeBaselineVersionNumber = activeBaseline.version_number;
+      scopeBaselineStatus = activeBaseline.status;
+      if (latestApprovedVersion) {
+        isAgreementApproved = true;
         agreementStatus = "APPROVED";
+        agreementContent = latestApprovedVersion.content ?? agreementContent;
+        agreementApprovedAt = latestApprovedVersion.approved_at ?? agreementApprovedAt;
       }
     }
   }
 
-  // Prefer the newest APPROVED version for scope-change baseline if current_version_id points to a newer draft
-  if (agreement?.id && !isAgreementApproved) {
-    const { data: approvedBaseline } = await serviceClient
-      .from("agreement_versions")
-      .select("id, version_number, status")
-      .eq("agreement_id", agreement.id)
-      .eq("status", "APPROVED")
-      .order("version_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (approvedBaseline?.id) {
-      scopeBaselineVersionId = approvedBaseline.id;
-      scopeBaselineVersionNumber = approvedBaseline.version_number;
-      scopeBaselineStatus = approvedBaseline.status;
+  // Catch-up idempotent sync so approved agreements always materialize agreed milestones
+  if (isAgreementApproved) {
+    try {
+      await syncApprovedAgreementMilestones({
+        supabase: serviceClient,
+        projectId: boundProjectId,
+        actorLabel: "System catch-up",
+      });
+    } catch {
+      // Non-fatal fallback; portal continues rendering current database milestones
     }
   }
 
-  // 8. Query milestones for boundProjectId
-  const { data: rawMilestones, error: milestonesError } = await serviceClient
-    .from("milestones")
-    .select(`
-      id,
-      title,
-      description,
-      deliverables,
-      amount_minor,
-      currency,
-      due_date,
-      sort_order,
-      status,
-      agreement_version_id
-    `)
-    .eq("project_id", boundProjectId)
-    .order("sort_order", { ascending: true });
+  // 8. Query milestones & sanitized activity history for boundProjectId
+  const [{ data: rawMilestones, error: milestonesError }, { data: rawActivities }] = await Promise.all([
+    serviceClient
+      .from("milestones")
+      .select(`
+        id,
+        title,
+        description,
+        deliverables,
+        acceptance_criteria,
+        amount_minor,
+        currency,
+        due_date,
+        sort_order,
+        status,
+        agreement_version_id
+      `)
+      .eq("project_id", boundProjectId)
+      .order("sort_order", { ascending: true }),
+    serviceClient
+      .from("activity_events")
+      .select("id, actor_label, event_type, summary, metadata, created_at")
+      .eq("project_id", boundProjectId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  ]);
 
   if (milestonesError) {
     return renderUnavailablePortal("Milestone data could not be retrieved.");
   }
+
+  const typedActivities = ((rawActivities ?? []) as Array<{
+    id: string;
+    actor_label: string;
+    event_type: string;
+    summary: string;
+    metadata?: Record<string, unknown> | null;
+    created_at: string;
+  }>);
+
+  const milestoneNotes = extractMilestoneNotes(typedActivities);
+
+  const portalActivities: PortalActivityItem[] = typedActivities.map((event) => ({
+    id: event.id,
+    actorLabel: event.actor_label,
+    eventType: event.event_type,
+    summary: event.summary,
+    createdAt: event.created_at,
+  }));
 
   const milestoneList = (rawMilestones || []) as Array<{
     id: string;
     title: string;
     description: string;
     deliverables: string[];
+    acceptance_criteria: string[];
     amount_minor: number;
     currency: string;
     due_date: string | null;
@@ -358,11 +423,14 @@ export default async function ClientPortalPage({
       paymentStatus !== "PAID" &&
       paymentStatus !== "PENDING_VERIFICATION";
 
+    const notes = milestoneNotes[m.id];
+
     return {
       id: m.id,
       title: m.title,
       description: m.description,
       deliverables: m.deliverables || [],
+      acceptanceCriteria: m.acceptance_criteria || [],
       amountMinor: m.amount_minor,
       currency: m.currency,
       dueDate: m.due_date,
@@ -373,6 +441,9 @@ export default async function ClientPortalPage({
       paymentIntentId: reusableIntentId,
       providerOrderId: reusableOrderId,
       completedCaptureId: completedCaptureId || null,
+      latestSubmissionNote: notes?.latestSubmissionNote ?? null,
+      latestDeliverableUrl: notes?.latestDeliverableUrl ?? null,
+      latestFeedbackNote: notes?.latestFeedbackNote ?? null,
     };
   });
 
@@ -409,13 +480,19 @@ export default async function ClientPortalPage({
     currency: project.currency,
     totalAmountMinor: project.total_amount_minor,
     projectStatus: project.status,
+    startDate: (project as { start_date?: string | null }).start_date ?? null,
+    targetEndDate: (project as { target_end_date?: string | null }).target_end_date ?? null,
     agreementStatus,
     agreementVersionId: scopeBaselineVersionId ?? agreementVersionId,
     agreementVersionNumber,
     scopeBaselineVersionNumber: scopeBaselineVersionNumber ?? agreementVersionNumber,
     scopeBaselineStatus: scopeBaselineStatus ?? agreementStatus,
+    agreementContent,
+    agreementApprovedAt,
+    agreementVersionHistory,
     canUseAi: Boolean(process.env.GEMINI_API_KEY),
     changeRequests: portalChangeRequests,
+    activities: portalActivities,
     milestones: portalMilestones,
   };
 

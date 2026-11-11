@@ -1,8 +1,14 @@
 import { Suspense } from "react";
 import { Card } from "@/components/ui/card";
 import { PayPalSellerSettingsCard } from "@/features/freelancer/paypal-seller-settings-card";
+import { ProfileSettingsCard } from "@/features/freelancer/profile-settings-card";
+import { getMyProfile } from "@/features/projects/data";
 
-export default function SettingsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  const profile = await getMyProfile();
+
   return (
     <>
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Settings</p>
@@ -19,12 +25,12 @@ export default function SettingsPage() {
         <PayPalSellerSettingsCard />
       </Suspense>
 
-      <Card className="mt-8 max-w-2xl p-6">
-        <h2 className="font-display text-xl text-ink-950">Profile controls</h2>
-        <p className="mt-3 leading-7 text-ink-700">
-          Your Supabase account is the authentication boundary. Profile editing is synchronized with your active session.
-        </p>
-      </Card>
+      <ProfileSettingsCard
+        email={profile.email}
+        initialCountryCode={profile.countryCode}
+        initialDisplayName={profile.displayName}
+        isConfigured={profile.isConfigured}
+      />
     </>
   );
 }

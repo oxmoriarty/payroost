@@ -8,11 +8,25 @@ import { formatBriefToMarkdown } from "@/features/briefs/format";
 import type { StructuredBrief } from "@/features/briefs/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { formatMoney } from "@/lib/utils";
 
 export function NewProjectForm() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [totalAmountMinor, setTotalAmountMinor] = useState("");
   const [showAiAssistant, setShowAiAssistant] = useState(true);
+
+  let amountHint = "Example: 200000 means USD 2,000.00";
+  const parsedAmount = Number(totalAmountMinor);
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (Number.isInteger(parsedAmount) && parsedAmount > 0 && /^[A-Z]{3}$/.test(normalizedCurrency)) {
+    try {
+      amountHint = `Formatted total: ${formatMoney(parsedAmount, normalizedCurrency)}`;
+    } catch {
+      amountHint = "Enter a valid 3-letter ISO currency code.";
+    }
+  }
 
   function handleApplyBrief(structuredBrief: StructuredBrief) {
     if (!title || title.trim().length === 0) {
@@ -80,14 +94,23 @@ export function NewProjectForm() {
               hint="A verification link will be sent to this email upon creation."
               required
             />
-            <Field label="Currency" name="currency" defaultValue="USD" maxLength={3} required />
+            <Field
+              label="Currency"
+              name="currency"
+              maxLength={3}
+              required
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+            />
             <Field
               label="Total amount (minor units)"
               name="totalAmountMinor"
               type="number"
               min="1"
-              hint="Example: 200000 means USD 2,000.00"
+              hint={amountHint}
               required
+              value={totalAmountMinor}
+              onChange={(e) => setTotalAmountMinor(e.target.value)}
             />
             <Field label="Start date" name="startDate" type="date" />
             <Field label="Expected completion" name="targetEndDate" type="date" />

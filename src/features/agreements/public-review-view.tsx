@@ -5,22 +5,17 @@ import { CheckCircle2, AlertCircle, ShieldAlert, KeyRound, Loader2, ArrowRight }
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatMoney } from "@/lib/utils";
+import {
+  AgreementDocumentView,
+  type AgreementContentLike,
+} from "@/features/agreements/agreement-document-view";
 
 interface PublicReviewData {
   review_link_id: string;
   project_title: string;
   client_name: string;
   freelancer_name: string;
-  content: {
-    summary?: string;
-    objective?: string;
-    scopeItems?: Array<{ title: string; description?: string; deliverables?: string[] }>;
-    milestones?: Array<{ title: string; description?: string; amountMinor: number; currency: string; dueDate?: string | null }>;
-    exclusions?: string[];
-    revisionPolicy?: string;
-    paymentTerms?: string;
-  };
+  content: AgreementContentLike;
   version_number: number;
   sent_at: string;
   expires_at: string;
@@ -160,60 +155,9 @@ export function PublicReviewView({
         </div>
       )}
 
-      {/* Scope and Deliverables */}
-      <Card className="p-6 sm:p-8 space-y-6">
-        <div>
-          <h2 className="font-display text-xl text-ink-950">Executive Summary</h2>
-          <p className="mt-2 text-sm text-ink-800 leading-relaxed">{content.summary || "No summary provided."}</p>
-        </div>
-
-        <div>
-          <h2 className="font-display text-xl text-ink-950">Project Objective</h2>
-          <p className="mt-2 text-sm text-ink-800 leading-relaxed">{content.objective || "No objective provided."}</p>
-        </div>
-
-        {content.scopeItems && content.scopeItems.length > 0 && (
-          <div>
-            <h2 className="font-display text-xl text-ink-950 mb-3">Scope Items</h2>
-            <div className="space-y-4">
-              {content.scopeItems.map((item, idx) => (
-                <div key={idx} className="rounded-xl border border-ink-200 bg-ink-50/50 p-4">
-                  <h3 className="font-semibold text-sm text-ink-900">{item.title}</h3>
-                  {item.description && <p className="mt-1 text-xs text-ink-700 leading-relaxed">{item.description}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {content.milestones && content.milestones.length > 0 && (
-          <div>
-            <h2 className="font-display text-xl text-ink-950 mb-3">Milestone Breakdown</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-ink-200 text-xs font-bold uppercase tracking-wider text-ink-600">
-                    <th className="py-2.5">Milestone</th>
-                    <th className="py-2.5">Due date</th>
-                    <th className="py-2.5 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100">
-                  {content.milestones.map((m, idx) => (
-                    <tr key={idx}>
-                      <td className="py-3">
-                        <p className="font-semibold text-ink-900">{m.title}</p>
-                        {m.description && <p className="text-xs text-ink-600 mt-0.5">{m.description}</p>}
-                      </td>
-                      <td className="py-3 text-xs text-ink-700">{m.dueDate ? new Date(m.dueDate).toLocaleDateString() : "Flexible"}</td>
-                      <td className="py-3 text-right font-medium text-ink-900">{formatMoney(m.amountMinor, m.currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+      {/* Scope, Deliverables, Acceptance Criteria, and Terms */}
+      <Card className="p-6 sm:p-8">
+        <AgreementDocumentView content={content} />
       </Card>
 
       {/* Decision Section with OTP Challenge Flow */}

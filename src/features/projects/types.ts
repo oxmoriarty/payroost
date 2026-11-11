@@ -7,7 +7,43 @@ export type Project = {
 export type Agreement = { id: string; project_id: string; current_version_id: string | null; status: string; created_at: string; updated_at: string };
 export type AgreementVersion = { id: string; agreement_id: string; version_number: number; content: unknown; content_hash: string; status: string; created_by: string; created_at: string; updated_at: string; sent_at: string | null; approved_at: string | null; approved_by_label: string | null };
 export type Milestone = { id: string; project_id: string; agreement_version_id: string; title: string; description: string; deliverables: string[]; acceptance_criteria: string[]; amount_minor: number; currency: string; due_date: string | null; sort_order: number; status: string; created_at: string; updated_at: string };
-export type ActivityEvent = { id: string; project_id: string; actor_label: string; event_type: string; summary: string; created_at: string };
+export type ActivityEvent = { id: string; project_id: string; actor_label: string; event_type: string; summary: string; metadata?: Record<string, unknown> | null; created_at: string };
+
+export type WorkspaceNotification = {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  kind: "VERIFY_CLIENT" | "AGREEMENT_CHANGES" | "AGREEMENT_PENDING" | "SCOPE_OPEN" | "MILESTONE_REVISION" | "MILESTONE_SUBMITTED";
+  title: string;
+  description: string;
+  href: string;
+  tone: "warning" | "info";
+  createdAt: string;
+};
+
+export type ProjectSummaryItem = Project & {
+  agreementStatus: string;
+  agreementVersionNumber: number | null;
+  milestoneCount: number;
+  acceptedMilestoneCount: number;
+  submittedMilestoneCount: number;
+  revisionRequestedMilestoneCount: number;
+  openChangeRequestCount: number;
+};
+
+export type DashboardSummary = {
+  isConfigured: boolean;
+  metrics: {
+    activeProjectsCount: number;
+    awaitingApprovalCount: number;
+    openActionItemsCount: number;
+    confirmedPaymentsCount: number;
+    completedProjectsCount: number;
+  };
+  needsAttention: WorkspaceNotification[];
+  recentProjects: ProjectSummaryItem[];
+  recentActivities: Array<ActivityEvent & { projectTitle: string }>;
+};
 export type ChangeRequest = {
   id: string;
   project_id?: string;
