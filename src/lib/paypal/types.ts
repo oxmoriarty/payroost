@@ -86,6 +86,7 @@ export interface PayPalRequestOptions {
   timeoutMs?: number;
   paypalRequestId?: string;
   partnerAttributionId?: string;
+  skipPartnerAttribution?: boolean;
   authAssertion?: { payerId: string };
 }
 

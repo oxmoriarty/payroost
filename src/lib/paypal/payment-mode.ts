@@ -232,3 +232,85 @@ export function isValidDistinctSellerIdentifier(
 
   return true;
 }
+
+const WEBHOOK_ID_REGEX = /^[A-Za-z0-9_-]{8,128}$/;
+
+export type PayPalWebhookConfigValidationResult =
+  | {
+      valid: true;
+      mode: PayPalPaymentMode;
+      webhookId: string;
+      serverConfig: PlatformModeConfigValidationSuccess;
+    }
+  | {
+      valid: false;
+      mode: PayPalPaymentMode;
+      reason: string;
+    };
+
+/**
+ * Validates that both server payment-mode credentials AND PayPal webhook configuration
+ * are complete and strictly Sandbox-scoped. Fails closed if PAYPAL_WEBHOOK_ID is absent.
+ */
+export function validatePayPalWebhookServerConfig(
+  config: PayPalConfig
+): PayPalWebhookConfigValidationResult {
+  const serverValidation = validatePayPalServerModeConfig(config);
+  if (!serverValidation.valid) {
+    return serverValidation;
+  }
+
+  if (config.environment !== "sandbox") {
+    return {
+      valid: false,
+      mode: serverValidation.mode,
+      reason: "UNSUPPORTED_ENVIRONMENT",
+    };
+  }
+
+  try {
+    const parsedUrl = new URL(config.baseUrl);
+    if (
+      parsedUrl.protocol !== "https:" ||
+      !["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"].includes(
+        parsedUrl.hostname.toLowerCase()
+      )
+    ) {
+      return {
+        valid: false,
+        mode: serverValidation.mode,
+        reason: "UNSUPPORTED_ENVIRONMENT",
+      };
+    }
+  } catch {
+    return {
+      valid: false,
+      mode: serverValidation.mode,
+      reason: "UNSUPPORTED_ENVIRONMENT",
+    };
+  }
+
+  const webhookId = config.webhookId?.trim();
+  if (!webhookId) {
+    return {
+      valid: false,
+      mode: serverValidation.mode,
+      reason: "MISSING_WEBHOOK_ID",
+    };
+  }
+
+  if (!WEBHOOK_ID_REGEX.test(webhookId)) {
+    return {
+      valid: false,
+      mode: serverValidation.mode,
+      reason: "INVALID_WEBHOOK_ID",
+    };
+  }
+
+  return {
+    valid: true,
+    mode: serverValidation.mode,
+    webhookId,
+    serverConfig: serverValidation,
+  };
+}

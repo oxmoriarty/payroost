@@ -140,10 +140,11 @@ export class PayPalClient {
     }
 
     // Endpoint-specific Partner Attribution ID (BN Code)
-    const partnerAttributionId =
-      options.partnerAttributionId ||
-      options.headers?.["PayPal-Partner-Attribution-Id"] ||
-      this.config.partnerAttributionId;
+    const partnerAttributionId = options.skipPartnerAttribution
+      ? undefined
+      : options.partnerAttributionId ||
+        options.headers?.["PayPal-Partner-Attribution-Id"] ||
+        this.config.partnerAttributionId;
     if (partnerAttributionId) {
       headers.set("PayPal-Partner-Attribution-Id", partnerAttributionId);
     } else {

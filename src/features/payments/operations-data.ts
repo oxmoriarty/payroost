@@ -34,6 +34,10 @@ export interface PaymentOperationRow {
   reconciliationReason: string | null;
   webhookStatus: string | null;
   webhookEventId: string | null;
+  webhookEventType?: string | null;
+  webhookProviderEventId?: string | null;
+  webhookAttemptCount?: number;
+  webhookLastProcessedAt?: string | null;
   hasExpiredLease: boolean;
   isOwner: boolean;
   createdAt: string;
@@ -193,26 +197,104 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     }
   }
 
-  // 3. Correlate webhook status via server service client (read-only diagnostic)
-  const webhookMap = new Map<string, { status: string; eventId: string }>();
+  // 3. Correlate webhook status via server service client (read-only diagnostic, tenant-scoped)
+  interface WebhookDisplayInfo {
+    status: string;
+    eventId: string;
+    eventType: string | null;
+    providerEventId: string | null;
+    attemptCount: number;
+    lastProcessedAt: string | null;
+  }
+
+  const webhookByIntentId = new Map<string, WebhookDisplayInfo>();
+  const webhookByResourceId = new Map<string, WebhookDisplayInfo>();
+
   try {
     const serviceClient = createServiceClient();
     const orderIds = rawIntents
       .map((i) => i.provider_order_id)
       .filter((id): id is string => Boolean(id));
+    const captureIds = transactions
+      .filter((tx) => tx.transaction_type === "CAPTURE" && tx.provider_reference_id)
+      .map((tx) => tx.provider_reference_id);
+    const allowedResourceIds = new Set([...orderIds, ...captureIds]);
+    const allowedIntentIds = new Set(intentIds);
 
-    if (orderIds.length > 0) {
+    if (allowedIntentIds.size > 0 || allowedResourceIds.size > 0) {
       const { data: webhooks } = await serviceClient
         .from("provider_webhook_events")
-        .select("id, provider_event_id, status, payload")
-        .order("created_at", { ascending: false });
+        .select(
+          "id, provider_event_id, event_type, resource_id, payment_intent_id, status, processing_outcome, attempt_count, duplicate_delivery_count, signature_verified, last_processed_at, processed_at, created_at, payload"
+        )
+        .eq("signature_verified", true)
+        .order("created_at", { ascending: false })
+        .limit(200);
 
       if (webhooks) {
-        for (const wh of webhooks) {
-          const payload = wh.payload as { id?: string; resource?: { id?: string } } | null;
-          const resourceId = payload?.resource?.id || payload?.id;
-          if (resourceId && !webhookMap.has(resourceId)) {
-            webhookMap.set(resourceId, { status: wh.status, eventId: wh.id });
+        for (const rawWh of webhooks as Array<Record<string, unknown>>) {
+          const whIntentId =
+            typeof rawWh.payment_intent_id === "string" ? rawWh.payment_intent_id : null;
+          const payload = rawWh.payload as { id?: string; resource?: { id?: string } } | null;
+          const whResourceId =
+            (typeof rawWh.resource_id === "string" && rawWh.resource_id) ||
+            payload?.resource?.id ||
+            payload?.id ||
+            null;
+
+          // Enforce strict project-member tenant scope: ignore webhooks outside user's intents/resources
+          const matchesIntent = whIntentId !== null && allowedIntentIds.has(whIntentId);
+          const matchesResource = whResourceId !== null && allowedResourceIds.has(whResourceId);
+          if (!matchesIntent && !matchesResource) {
+            continue;
+          }
+
+          const rawOutcome =
+            typeof rawWh.processing_outcome === "string" && rawWh.processing_outcome.trim()
+              ? rawWh.processing_outcome.trim().toUpperCase()
+              : null;
+          const rawStatus =
+            typeof rawWh.status === "string" ? rawWh.status.trim().toUpperCase() : "RECEIVED";
+          const dupCount =
+            typeof rawWh.duplicate_delivery_count === "number"
+              ? rawWh.duplicate_delivery_count
+              : 0;
+
+          let resolvedStatus = rawOutcome || rawStatus;
+          if (rawStatus === "RETRY" && rawOutcome !== "REQUIRES_RECONCILIATION") {
+            resolvedStatus = "PROCESSING";
+          } else if (
+            resolvedStatus === "PROCESSED" &&
+            dupCount > 0 &&
+            rawOutcome !== "DUPLICATE"
+          ) {
+            resolvedStatus = "PROCESSED";
+          }
+
+          const info: WebhookDisplayInfo = {
+            status: resolvedStatus,
+            eventId: String(rawWh.id || ""),
+            eventType: typeof rawWh.event_type === "string" ? rawWh.event_type : null,
+            providerEventId:
+              typeof rawWh.provider_event_id === "string" ? rawWh.provider_event_id : null,
+            attemptCount:
+              typeof rawWh.attempt_count === "number" ? rawWh.attempt_count : 0,
+            lastProcessedAt:
+              (typeof rawWh.last_processed_at === "string" && rawWh.last_processed_at) ||
+              (typeof rawWh.processed_at === "string" && rawWh.processed_at) ||
+              (typeof rawWh.created_at === "string" && rawWh.created_at) ||
+              null,
+          };
+
+          if (whIntentId && allowedIntentIds.has(whIntentId) && !webhookByIntentId.has(whIntentId)) {
+            webhookByIntentId.set(whIntentId, info);
+          }
+          if (
+            whResourceId &&
+            allowedResourceIds.has(whResourceId) &&
+            !webhookByResourceId.has(whResourceId)
+          ) {
+            webhookByResourceId.set(whResourceId, info);
           }
         }
       }
@@ -247,9 +329,10 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       new Date(intent.capture_lease_expires_at).getTime() < now
     );
 
-    const whInfo = intent.provider_order_id
-      ? webhookMap.get(intent.provider_order_id) || (captureTx ? webhookMap.get(captureTx.provider_reference_id) : undefined)
-      : undefined;
+    const whInfo =
+      webhookByIntentId.get(intent.id) ||
+      (captureTx ? webhookByResourceId.get(captureTx.provider_reference_id) : undefined) ||
+      (intent.provider_order_id ? webhookByResourceId.get(intent.provider_order_id) : undefined);
 
     return {
       id: intent.id,
@@ -270,6 +353,10 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       reconciliationReason: intent.reconciliation_reason,
       webhookStatus: whInfo?.status || null,
       webhookEventId: whInfo?.eventId || null,
+      webhookEventType: whInfo?.eventType ?? null,
+      webhookProviderEventId: whInfo?.providerEventId ?? null,
+      webhookAttemptCount: whInfo?.attemptCount,
+      webhookLastProcessedAt: whInfo?.lastProcessedAt ?? null,
       hasExpiredLease: hasExpiredCreationLease || hasExpiredCaptureLease,
       isOwner,
       createdAt: intent.created_at,

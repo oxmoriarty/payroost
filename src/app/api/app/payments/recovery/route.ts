@@ -503,7 +503,7 @@ export async function POST(request: Request) {
 
       const { data: webhookEvent, error: whError } = await serviceClient
         .from("provider_webhook_events")
-        .select("id, provider_event_id, event_type, resource_type, status, payload, signature_verified, lease_expires_at")
+        .select("id, provider_event_id, event_type, resource_type, resource_id, payment_intent_id, status, processing_outcome, payload, signature_verified, lease_expires_at")
         .eq("id", webhookEventId)
         .maybeSingle();
 
@@ -552,6 +552,9 @@ export async function POST(request: Request) {
         resource?: {
           id?: string;
           custom_id?: string;
+          purchase_units?: Array<{
+            custom_id?: string;
+          }>;
           supplementary_data?: {
             related_ids?: {
               order_id?: string;
@@ -564,11 +567,25 @@ export async function POST(request: Request) {
         return apiError("MALFORMED_WEBHOOK_PAYLOAD", 400);
       }
 
-      const resourceCustomId = payload.resource.custom_id;
-      const resourceId = payload.resource.id;
+      const webhookPaymentIntentId = (webhookEvent as { payment_intent_id?: string | null })
+        .payment_intent_id;
+      const resourceCustomId =
+        payload.resource.custom_id ?? payload.resource.purchase_units?.[0]?.custom_id;
+      const resourceId =
+        payload.resource.id ??
+        (webhookEvent as { resource_id?: string | null }).resource_id ??
+        undefined;
       const relatedOrderId = payload.resource.supplementary_data?.related_ids?.order_id;
 
       let isCorrelated = false;
+
+      if (webhookPaymentIntentId) {
+        if (webhookPaymentIntentId === intent.id) {
+          isCorrelated = true;
+        } else {
+          return apiError("WEBHOOK_INTENT_MISMATCH", 403);
+        }
+      }
 
       // Rule A: custom_id matches intent.id
       if (resourceCustomId) {

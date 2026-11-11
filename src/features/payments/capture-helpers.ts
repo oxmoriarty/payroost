@@ -334,6 +334,28 @@ export async function executePayPalOrderGet(
 }
 
 /**
+ * Executes GET /v2/payments/captures/{captureId} using mode-scoped headers.
+ * Uses 1-arg get(path) in MERCHANT mode to avoid attaching Platform options.
+ */
+export async function executePayPalCaptureGet(
+  paypalClient: Pick<PayPalClient, "get">,
+  captureId: string,
+  ctx: CapturePaymentContext
+): Promise<{ data: PayPalCaptureEntryShape & { supplementary_data?: { related_ids?: { order_id?: string } } }; status: number; headers: Headers }> {
+  const path = `/v2/payments/captures/${encodeURIComponent(captureId)}`;
+  if (ctx.mode === "PLATFORM") {
+    const opts = buildPayPalCaptureRequestOptions(ctx);
+    return paypalClient.get<PayPalCaptureEntryShape & { supplementary_data?: { related_ids?: { order_id?: string } } }>(
+      path,
+      opts
+    );
+  }
+  return paypalClient.get<PayPalCaptureEntryShape & { supplementary_data?: { related_ids?: { order_id?: string } } }>(
+    path
+  );
+}
+
+/**
  * Executes POST /v2/checkout/orders/{orderId}/capture using mode-scoped headers and idempotency key.
  */
 export async function executePayPalOrderPostCapture(

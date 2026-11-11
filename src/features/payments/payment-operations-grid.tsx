@@ -329,12 +329,60 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
       {
         field: "webhookStatus",
         headerName: "Webhook",
-        minWidth: 110,
+        minWidth: 165,
         filter: "agTextColumnFilter",
-        cellRenderer: ({ value }: { value?: string | null }) => {
+        cellRenderer: ({
+          value,
+          data,
+        }: {
+          value?: string | null;
+          data?: PaymentOperationRow;
+        }) => {
           if (!value) return <span className="text-ink-400">—</span>;
-          const tone = value === "PROCESSED" ? "success" : value === "FAILED" ? "warning" : "info";
-          return <Badge tone={tone}>{value}</Badge>;
+
+          let tone: "success" | "warning" | "info" | "neutral" = "info";
+          let label = value;
+          switch (value.toUpperCase()) {
+            case "PROCESSED":
+              tone = "success";
+              label = "Processed";
+              break;
+            case "DUPLICATE":
+              tone = "neutral";
+              label = "Duplicate";
+              break;
+            case "RECEIVED":
+              tone = "info";
+              label = "Received";
+              break;
+            case "VERIFIED":
+              tone = "info";
+              label = "Verified";
+              break;
+            case "PROCESSING":
+              tone = "warning";
+              label = "Processing";
+              break;
+            case "FAILED":
+              tone = "warning";
+              label = "Failed";
+              break;
+            case "REQUIRES_RECONCILIATION":
+              tone = "warning";
+              label = "Requires reconciliation";
+              break;
+          }
+
+          return (
+            <div className="flex flex-col gap-0.5 py-1">
+              <Badge tone={tone}>{label}</Badge>
+              {data?.webhookEventType && (
+                <span className="truncate font-mono text-[10px] text-ink-500" title={data.webhookEventType}>
+                  {data.webhookEventType}
+                </span>
+              )}
+            </div>
+          );
         },
       },
       {
