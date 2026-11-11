@@ -89,7 +89,7 @@ PayRoost bridges the gap between independent professionals and clients by turnin
 
    # AI Assistant
    GEMINI_API_KEY=your-gemini-api-key
-   GEMINI_MODEL=gemini-1.5-flash
+   GEMINI_MODEL=gemini-3.8-flash
 
    # PayPal Sandbox (Multiparty)
    PAYPAL_ENV=sandbox
