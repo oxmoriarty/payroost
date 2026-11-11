@@ -4,6 +4,8 @@ import {
   getClientIp,
   getPortalTokenRateLimitKey,
   getPortalIpRateLimitKey,
+  getReviewTokenRateLimitKey,
+  getReviewIpRateLimitKey,
 } from "./client-ip";
 
 describe("client-ip: Client IP Trust Hardening & Proxy Verification", () => {
@@ -130,6 +132,23 @@ describe("client-ip: Client IP Trust Hardening & Proxy Verification", () => {
       expect(keyOtp).toBe("portal-otp-ip:198.51.100.25");
       expect(keyIntent).toBe("portal-payment-intent-ip:198.51.100.25");
       expect(keyGet).not.toContain(sampleTokenHash);
+    });
+  });
+
+  describe("getReviewTokenRateLimitKey & getReviewIpRateLimitKey", () => {
+    it("separates primary token hash identity from optional IP key", () => {
+      expect(getReviewTokenRateLimitKey("review-read", sampleTokenHash)).toBe(
+        `review-read:${sampleTokenHash}`
+      );
+      expect(getReviewTokenRateLimitKey("review-write", sampleTokenHash)).toBe(
+        `review-write:${sampleTokenHash}`
+      );
+      expect(getReviewTokenRateLimitKey("review-otp", sampleTokenHash)).toBe(
+        `review-otp:${sampleTokenHash}`
+      );
+      expect(getReviewIpRateLimitKey("review-write", "203.0.113.5")).toBe(
+        "review-write-ip:203.0.113.5"
+      );
     });
   });
 });

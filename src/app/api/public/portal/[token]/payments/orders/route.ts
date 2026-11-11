@@ -9,6 +9,7 @@ import {
   getPortalTokenRateLimitKey,
   getPortalIpRateLimitKey,
 } from "@/lib/security/client-ip";
+import { getCanonicalAppUrl } from "@/lib/security/app-url";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
 import { PayPalClient } from "@/lib/paypal/client";
@@ -645,6 +646,20 @@ export async function POST(
       });
     }
 
+    let appBaseUrl: string;
+    try {
+      appBaseUrl = getCanonicalAppUrl();
+    } catch {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("CONFIGURATION_UNAVAILABLE", 503, {
+        "Cache-Control": "no-store",
+      });
+    }
+
     // Re-verify seller readiness server-side before initiating multi-party order
     const sellerCheck = await verifyProjectSellerReadiness(serviceClient, authResult.projectId);
     if (sellerCheck.error === "DATABASE_UNAVAILABLE") {
@@ -712,12 +727,8 @@ export async function POST(
     }
     sellerPayerId = intentSellerPayerId;
 
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "payroost.com";
-    const proto = request.headers.get("x-forwarded-proto") || "https";
-    const origin = request.headers.get("origin") || `${proto}://${host}`;
-
-    const returnUrl = `${origin}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=approved`;
-    const cancelUrl = `${origin}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=cancelled`;
+    const returnUrl = `${appBaseUrl}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=approved`;
+    const cancelUrl = `${appBaseUrl}/portal/${encodeURIComponent(token)}?payment_intent_id=${encodeURIComponent(intent.id)}&payment_status=cancelled`;
 
     try {
       const platformResult = await paypalClient.createPlatformOrder({

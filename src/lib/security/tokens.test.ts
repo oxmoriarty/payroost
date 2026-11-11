@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   createReviewToken,
@@ -8,6 +9,10 @@ import {
   hashSessionToken,
   createCsrfSecret,
   validateCsrfToken,
+  createOtpCode,
+  hashOtpCode,
+  getOtpHmacSecret,
+  OtpSecretConfigurationError,
 } from "@/lib/security/tokens";
 
 describe("Review and Portal token security", () => {
@@ -95,6 +100,92 @@ describe("Review and Portal token security", () => {
       const nonHexToken = validSecret.slice(0, 63) + "z";
       expect(validateCsrfToken(nonHexToken, validSecret)).toBe(false);
       expect(validateCsrfToken(validSecret, nonHexToken)).toBe(false);
+    });
+  });
+
+  describe("hashOtpCode and getOtpHmacSecret configuration security", () => {
+    const configuredSecret = "configured-prod-otp-secret-with-at-least-32-bytes!";
+
+    it("generates 6-digit numeric OTP codes", () => {
+      const otp = createOtpCode();
+      expect(otp).toMatch(/^\d{6}$/);
+    });
+
+    it("preserves exact SHA-256 HMAC behavior when valid PAYROOST_OTP_SECRET is configured", () => {
+      const expected = createHmac("sha256", configuredSecret).update("482910", "utf8").digest("hex");
+      expect(
+        hashOtpCode("482910", undefined, {
+          NODE_ENV: "production",
+          PAYROOST_OTP_SECRET: configuredSecret,
+        })
+      ).toBe(expected);
+    });
+
+    it("preserves exact SHA-256 HMAC behavior with valid explicit secretOverride", () => {
+      const override = "explicit-override-otp-secret-minimum-32-bytes-key";
+      const expected = createHmac("sha256", override).update("123456", "utf8").digest("hex");
+      expect(hashOtpCode("123456", override, { NODE_ENV: "production" })).toBe(expected);
+    });
+
+    it("fails closed in production when PAYROOST_OTP_SECRET is missing or blank", () => {
+      expect(() => getOtpHmacSecret({ NODE_ENV: "production" })).toThrow(OtpSecretConfigurationError);
+      expect(() => getOtpHmacSecret({ NODE_ENV: "production", PAYROOST_OTP_SECRET: "" })).toThrow(
+        OtpSecretConfigurationError
+      );
+      expect(() =>
+        hashOtpCode("123456", undefined, { NODE_ENV: "production", PAYROOST_OTP_SECRET: "   " })
+      ).toThrow(OtpSecretConfigurationError);
+    });
+
+    it("fails closed in development when PAYROOST_OTP_SECRET is missing", () => {
+      expect(() => getOtpHmacSecret({ NODE_ENV: "development" })).toThrow(OtpSecretConfigurationError);
+      expect(() =>
+        hashOtpCode("123456", undefined, { NODE_ENV: "development" })
+      ).toThrow(OtpSecretConfigurationError);
+    });
+
+    it("rejects short, placeholder, or invalid PAYROOST_OTP_SECRET without exposing the secret in errors", () => {
+      const shortSecret = "too-short-secret-123";
+      let capturedError: unknown;
+      try {
+        hashOtpCode("123456", undefined, {
+          NODE_ENV: "production",
+          PAYROOST_OTP_SECRET: shortSecret,
+        });
+      } catch (err) {
+        capturedError = err;
+      }
+      expect(capturedError).toBeInstanceOf(OtpSecretConfigurationError);
+      expect((capturedError as Error).message).not.toContain(shortSecret);
+
+      const placeholderSecret = "some-company-default-otp-secret-do-not-use-in-production";
+      expect(() =>
+        hashOtpCode("123456", undefined, {
+          NODE_ENV: "production",
+          PAYROOST_OTP_SECRET: placeholderSecret,
+        })
+      ).toThrow(OtpSecretConfigurationError);
+
+      expect(() =>
+        hashOtpCode("123456", undefined, {
+          NODE_ENV: "test",
+          PAYROOST_OTP_SECRET: "short-test-secret",
+        })
+      ).toThrow(OtpSecretConfigurationError);
+    });
+
+    it("keeps unconfigured NODE_ENV=test deterministic via an ephemeral key without using a hardcoded secret", () => {
+      const a = hashOtpCode("654321", undefined, { NODE_ENV: "test" });
+      const b = hashOtpCode("654321", undefined, { NODE_ENV: "test" });
+      expect(a).toBe(b);
+      expect(a).toMatch(/^[a-f0-9]{64}$/);
+      const removedLegacyHash = createHmac(
+        "sha256",
+        ["payroost", "default", "otp", "secret", "key", "do", "not", "use", "in", "production"].join("-")
+      )
+        .update("654321", "utf8")
+        .digest("hex");
+      expect(a).not.toBe(removedLegacyHash);
     });
   });
 });

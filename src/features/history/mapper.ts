@@ -25,6 +25,37 @@ const CLIENT_HIDDEN_EVENTS = new Set<string>([
   "payment.order_recovered",
 ]);
 
+const CLIENT_VISIBLE_EVENTS = new Set<string>([
+  "project.created",
+  "client_email.verified",
+  "client_email.changed",
+  "portal.invited",
+  "agreement.version_created",
+  "agreement.sent",
+  "agreement.approved",
+  "agreement.changes_requested",
+  "milestone.created",
+  "milestone.updated",
+  "milestone.plan_applied",
+  "milestone.started",
+  "milestone.submitted",
+  "milestone.accepted",
+  "milestone.revision_requested",
+  "change_request.submitted",
+  "change_request.analysis_updated",
+  "change_request.analysis_stale",
+  "change_request.resolved",
+  "change_request.withdrawn",
+  "payment.webhook_order_approved",
+  "payment.order_captured",
+  "payment.reconciliation_completed",
+  "payment.capture_pending",
+  "payment.webhook_capture_pending",
+  "payment.capture_failed",
+  "payment.webhook_capture_denied",
+  "payment.reconciliation_failed",
+]);
+
 function readMetaStr(
   metadata: Record<string, unknown> | null | undefined,
   ...keys: string[]
@@ -313,6 +344,13 @@ function buildTitleAndDiscipline(
         stateDisciplineBadge: "Reconciliation",
       };
     default:
+      if (audience === "client") {
+        return {
+          title: "Project update",
+          summary: "Project activity recorded",
+          stateDisciplineBadge: null,
+        };
+      }
       return {
         title: sanitizeNotificationText(eventType.replaceAll(".", " · "), 120, "Project event"),
         summary: sanitizeNotificationText(rawSummary, 300, "Project event recorded"),
@@ -395,7 +433,10 @@ export function mapActivityEventsToHistoryItems(
   const result: ProjectHistoryItem[] = [];
 
   for (const activity of activities) {
-    if (audience === "client" && CLIENT_HIDDEN_EVENTS.has(activity.event_type)) {
+    if (
+      audience === "client" &&
+      (CLIENT_HIDDEN_EVENTS.has(activity.event_type) || !CLIENT_VISIBLE_EVENTS.has(activity.event_type))
+    ) {
       continue;
     }
 

@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/auth/require-user";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
+import { getCanonicalAppUrl } from "@/lib/security/app-url";
+import { apiError } from "@/lib/http";
 
 export interface PayPalMerchantIntegrationResponse {
   merchant_id?: string;
@@ -52,7 +54,14 @@ const MERCHANT_ID_REGEX = /^[A-Za-z0-9_-]{3,64}$/;
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  let appUrl: string;
+  try {
+    appUrl = getCanonicalAppUrl();
+  } catch {
+    return apiError("CONFIGURATION_UNAVAILABLE", 503, {
+      "Cache-Control": "no-store",
+    });
+  }
 
   // Helper to construct safe UI redirects (prevents open redirects)
   const makeRedirect = (status: string, reason?: string) => {

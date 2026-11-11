@@ -233,6 +233,7 @@ export function mapActivityEventToNotificationDrafts(
           actionRequired: false,
           actionLabel: "View milestones",
           actionHref: "/portal#milestones",
+          actorLabel: "Freelancer",
           metadata: { projectTitle: project.title },
         }),
       );

@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { getCanonicalAppUrl } from "@/lib/security/app-url";
 import { apiError } from "@/lib/http";
 
 export interface PartnerReferralResponse {
@@ -78,7 +79,14 @@ export async function POST() {
   const trackingId = `pr_track_${randomBytes(20).toString("hex")}`;
 
   // 5. Construct return URL
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  let appUrl: string;
+  try {
+    appUrl = getCanonicalAppUrl();
+  } catch {
+    return apiError("CONFIGURATION_UNAVAILABLE", 503, {
+      "Cache-Control": "no-store",
+    });
+  }
   const returnUrl = `${appUrl}/api/app/freelancer/paypal/callback?state=${encodeURIComponent(trackingId)}`;
 
   // 6. Build official PayPal Partner Referrals API payload
@@ -125,19 +133,35 @@ export async function POST() {
       }
     );
     referralResponse = res.data;
-  } catch (err: unknown) {
-    return apiError("PAYPAL_REFERRAL_FAILED", 502, {
-      "Cache-Control": "no-store",
-      details: err instanceof Error ? err.message : "Failed to create partner referral",
-    });
+  } catch {
+    return NextResponse.json(
+      {
+        error: "PAYPAL_REFERRAL_FAILED",
+        message: "Failed to initiate PayPal seller onboarding. Please try again later.",
+      },
+      {
+        status: 502,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   }
 
   const actionUrl = referralResponse.links?.find((l) => l.rel === "action_url")?.href;
   if (!actionUrl) {
-    return apiError("MALFORMED_REFERRAL_RESPONSE", 502, {
-      "Cache-Control": "no-store",
-      message: "PayPal partner referrals response did not return an action_url",
-    });
+    return NextResponse.json(
+      {
+        error: "MALFORMED_REFERRAL_RESPONSE",
+        message: "PayPal did not return an onboarding redirect URL. Please try again.",
+      },
+      {
+        status: 502,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   }
 
   // 8. Persist onboarding record in public.freelancer_paypal_accounts

@@ -5,7 +5,7 @@ import { syncNotificationsFromActivityEvents } from "@/features/notifications/se
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { hashReviewToken, hashOtpCode } from "@/lib/security/tokens";
-import { allowRequest } from "@/lib/security/rate-limit";
+import { enforcePublicReviewRateLimit } from "@/lib/security/review-rate-limit";
 import { apiError } from "@/lib/http";
 
 const decisionSchema = z.object({
@@ -15,27 +15,47 @@ const decisionSchema = z.object({
   otpCode: z.string().trim().regex(/^\d{6}$/, "Must be a 6-digit OTP code"),
 });
 
-function requestKey(request: Request, token: string) { return `${request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local"}:${hashReviewToken(token).slice(0, 16)}`; }
-
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  if (!(await allowRequest(`review-read:${requestKey(request, token)}`, 30, 60_000))) return apiError("RATE_LIMITED", 429);
+  const tokenHash = hashReviewToken(token);
+  const rateLimitError = await enforcePublicReviewRateLimit(
+    request,
+    "review-read",
+    tokenHash,
+    30,
+    60_000
+  );
+  if (rateLimitError) return rateLimitError;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("get_public_review", { p_token_hash: hashReviewToken(token) });
+  const { data, error } = await supabase.rpc("get_public_review", { p_token_hash: tokenHash });
   if (error || !data || (data as unknown[]).length !== 1) return apiError("REVIEW_UNAVAILABLE", 404);
   return NextResponse.json({ data: (data as unknown[])[0] });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  if (!(await allowRequest(`review-write:${requestKey(request, token)}`, 6, 60_000))) return apiError("RATE_LIMITED", 429);
+  const tokenHash = hashReviewToken(token);
+  const rateLimitError = await enforcePublicReviewRateLimit(
+    request,
+    "review-write",
+    tokenHash,
+    6,
+    60_000
+  );
+  if (rateLimitError) return rateLimitError;
   let body: unknown;
   try { body = await request.json(); } catch { return apiError("INVALID_JSON"); }
   const parsed = decisionSchema.safeParse(body);
   if (!parsed.success) return apiError("VALIDATION_ERROR");
+  let otpHmac: string;
+  try {
+    otpHmac = hashOtpCode(parsed.data.otpCode);
+  } catch {
+    return apiError("CONFIGURATION_UNAVAILABLE", 503, {
+      "Cache-Control": "no-store",
+    });
+  }
   const supabase = await createClient();
-  const otpHmac = hashOtpCode(parsed.data.otpCode);
-  const tokenHash = hashReviewToken(token);
   const { data, error } = await supabase.rpc("submit_public_review_with_otp", {
     p_token_hash: tokenHash,
     p_action: parsed.data.action,

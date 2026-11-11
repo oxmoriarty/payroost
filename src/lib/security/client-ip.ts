@@ -96,3 +96,30 @@ export function getPortalIpRateLimitKey(
 ): string {
   return `${prefix}-ip:${ip}`;
 }
+
+export type ReviewRateLimitPrefix =
+  | "review-read"
+  | "review-write"
+  | "review-otp";
+
+/**
+ * Derives the mandatory, primary token-based rate-limit key for public review links.
+ * Never contains an IP address so rotating forwarding headers cannot bypass it.
+ */
+export function getReviewTokenRateLimitKey(
+  prefix: ReviewRateLimitPrefix,
+  tokenHash: string
+): string {
+  return `${prefix}:${tokenHash}`;
+}
+
+/**
+ * Derives the optional, secondary IP-based rate-limit key for public review links.
+ * Only used when proxy trust is explicitly enabled and a valid IP is extracted.
+ */
+export function getReviewIpRateLimitKey(
+  prefix: ReviewRateLimitPrefix,
+  ip: string
+): string {
+  return `${prefix}-ip:${ip}`;
+}

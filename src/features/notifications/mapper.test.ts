@@ -168,4 +168,19 @@ describe("Notification Mapper & Privacy/Idempotency Rules", () => {
     expect(reconRequired[0]?.category).toBe("RECONCILIATION");
     expect(reconRequired[0]?.action_href).toBe("/app/payments");
   });
+
+  it("never exposes freelancer email in client portal.invited notification actor_label even for legacy activity rows", () => {
+    const legacyInviteDrafts = mapActivityEventToNotificationDrafts(
+      makeActivity("portal.invited", {
+        actor_label: "Freelancer (freelancer.private@agency.example)",
+        metadata: { expiresAt: "2026-11-18T00:00:00Z" },
+      }),
+      project,
+    );
+
+    expect(legacyInviteDrafts).toHaveLength(1);
+    expect(legacyInviteDrafts[0]?.recipient_type).toBe("CLIENT_PORTAL");
+    expect(legacyInviteDrafts[0]?.actor_label).toBe("Freelancer");
+    expect(JSON.stringify(legacyInviteDrafts)).not.toContain("freelancer.private@agency.example");
+  });
 });

@@ -549,4 +549,38 @@ describe("Phase 3B.2.3 & 3B.2.3.1: Owner Portal-Link Issuance (POST /api/project
     expect(typeof json.expiresAt).toBe("string");
     expect(new Date(json.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
+
+  // ==========================================================================
+  // 17. Portal invite activity event omits freelancer email PII from actor_label
+  // ==========================================================================
+  it("17. records portal.invited activity with generic actor_label without persisting freelancer email", async () => {
+    const projectId = getUniqueProjectId();
+    const insertedActivities: Array<Record<string, unknown>> = [];
+    mockFrom.mockImplementation((table?: string) => {
+      if (table === "activity_events") {
+        return {
+          select: mockSelect,
+          insert: vi.fn((payload: Record<string, unknown>) => {
+            insertedActivities.push(payload);
+            return Promise.resolve({ error: null });
+          }),
+        } as unknown as { select: typeof mockSelect };
+      }
+      return { select: mockSelect };
+    });
+
+    vi.spyOn(emailProvider, "sendPortalInvitationEmail").mockResolvedValueOnce({
+      success: true,
+      messageId: "resend-msg-privacy-1",
+    });
+
+    const req = createRequest(projectId);
+    const res = await POST(req, createContext(projectId));
+    expect(res.status).toBe(200);
+
+    expect(insertedActivities).toHaveLength(1);
+    expect(insertedActivities[0]?.event_type).toBe("portal.invited");
+    expect(insertedActivities[0]?.actor_label).toBe("Freelancer");
+    expect(JSON.stringify(insertedActivities[0])).not.toContain(validUser.email);
+  });
 });

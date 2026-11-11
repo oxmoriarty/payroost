@@ -577,6 +577,121 @@ describe("Phase 3B.R1.1: PayPal Onboarding Contract Verification & Hardening", (
 
       vi.unstubAllGlobals();
     });
+
+    it("enforces canonical app URL in onboard/callback and fails closed in production when unconfigured", async () => {
+      const origNodeEnv = process.env.NODE_ENV;
+      const origAppUrl = process.env.PAYROOST_APP_URL;
+      const origNextPublicUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+      try {
+        (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+        delete process.env.PAYROOST_APP_URL;
+        delete process.env.NEXT_PUBLIC_APP_URL;
+
+        const { POST } = await import("@/app/api/app/freelancer/paypal/onboard/route");
+        const { GET } = await import("@/app/api/app/freelancer/paypal/callback/route");
+
+        mockRequireUser.mockResolvedValueOnce({
+          user: { id: "user_prod_no_url", email: "freelancer@example.com" },
+        });
+        mockQueryResult = null;
+        const onboardMissingRes = await POST();
+        expect(onboardMissingRes.status).toBe(503);
+        expect(onboardMissingRes.headers.get("Cache-Control")).toBe("no-store");
+        expect((await onboardMissingRes.json()).error).toBe("CONFIGURATION_UNAVAILABLE");
+
+        const callbackMissingRes = await GET(
+          new Request("https://attacker.example/api/app/freelancer/paypal/callback?state=pr_track_1")
+        );
+        expect(callbackMissingRes.status).toBe(503);
+        expect(callbackMissingRes.headers.get("Cache-Control")).toBe("no-store");
+        expect((await callbackMissingRes.json()).error).toBe("CONFIGURATION_UNAVAILABLE");
+
+        process.env.PAYROOST_APP_URL = "https://portal.payroost.com///";
+        mockRequireUser.mockResolvedValueOnce({ user: { id: "user_test_cb" } });
+        const callbackValidRes = await GET(
+          new Request("https://untrusted.example/api/app/freelancer/paypal/callback")
+        );
+        expect(callbackValidRes.status).toBe(302);
+        expect(callbackValidRes.headers.get("location")).toBe(
+          "https://portal.payroost.com/app/settings?paypal_status=invalid_state&reason=MISSING_OR_INVALID_TRACKING_ID"
+        );
+      } finally {
+        if (origNodeEnv === undefined) delete (process.env as Record<string, string | undefined>).NODE_ENV;
+        else (process.env as Record<string, string | undefined>).NODE_ENV = origNodeEnv;
+        if (origAppUrl === undefined) delete process.env.PAYROOST_APP_URL;
+        else process.env.PAYROOST_APP_URL = origAppUrl;
+        if (origNextPublicUrl === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+        else process.env.NEXT_PUBLIC_APP_URL = origNextPublicUrl;
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("returns sanitized JSON error body and valid headers on onboard referral errors without leaking upstream details", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "user_ref_err", email: "freelancer@example.com" },
+      });
+      mockQueryResult = null;
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url) => {
+          if (typeof url === "string" && url.includes("/v1/oauth2/token")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ access_token: "token123", expires_in: 3600 }), {
+                status: 200,
+              })
+            );
+          }
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                name: "INVALID_REQUEST",
+                message: "Sensitive upstream credential/token dump: sk_live_secret",
+              }),
+              { status: 500 }
+            )
+          );
+        })
+      );
+
+      const { POST } = await import("@/app/api/app/freelancer/paypal/onboard/route");
+      const failRes = await POST();
+      expect(failRes.status).toBe(502);
+      expect(failRes.headers.get("Cache-Control")).toBe("no-store");
+      expect(failRes.headers.get("details")).toBeNull();
+      expect(failRes.headers.get("message")).toBeNull();
+      const failBody = await failRes.json();
+      expect(failBody.error).toBe("PAYPAL_REFERRAL_FAILED");
+      expect(typeof failBody.message).toBe("string");
+      expect(JSON.stringify(failBody)).not.toContain("sk_live_secret");
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url) => {
+          if (typeof url === "string" && url.includes("/v1/oauth2/token")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ access_token: "token123", expires_in: 3600 }), {
+                status: 200,
+              })
+            );
+          }
+          return Promise.resolve(
+            new Response(JSON.stringify({ links: [] }), { status: 200 })
+          );
+        })
+      );
+
+      const malformedRes = await POST();
+      expect(malformedRes.status).toBe(502);
+      expect(malformedRes.headers.get("Cache-Control")).toBe("no-store");
+      expect(malformedRes.headers.get("message")).toBeNull();
+      const malformedBody = await malformedRes.json();
+      expect(malformedBody.error).toBe("MALFORMED_REFERRAL_RESPONSE");
+      expect(typeof malformedBody.message).toBe("string");
+
+      vi.unstubAllGlobals();
+    });
   });
 
   // ==========================================================================

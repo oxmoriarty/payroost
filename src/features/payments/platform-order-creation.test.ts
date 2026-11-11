@@ -6,7 +6,10 @@ import { PayPalAuthManager } from "@/lib/paypal/auth";
 import * as rateLimitModule from "@/lib/security/rate-limit";
 import * as paypalEnvModule from "@/lib/paypal/env";
 import { hashSessionToken } from "@/lib/security/tokens";
-import { PORTAL_SESSION_COOKIE_NAME_DEV } from "@/lib/security/portal-session";
+import {
+  PORTAL_SESSION_COOKIE_NAME_DEV,
+  PORTAL_SESSION_COOKIE_NAME_PROD,
+} from "@/lib/security/portal-session";
 import { PayPalError, type PayPalConfig } from "@/lib/paypal/types";
 
 // Mock Supabase service client
@@ -36,6 +39,8 @@ vi.mock("next/headers", () => ({
 describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalTrustProxy = process.env.TRUST_PROXY;
+  const originalAppUrl = process.env.PAYROOST_APP_URL;
+  const originalNextPublicAppUrl = process.env.NEXT_PUBLIC_APP_URL;
 
   const validToken = "valid-portal-token-for-platform-orders-12345";
   const validRawSessionToken = "valid-test-portal-session-token-43-chars___";
@@ -162,6 +167,8 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
     vi.clearAllMocks();
     (process.env as Record<string, string | undefined>).NODE_ENV = "test";
     process.env.TRUST_PROXY = "false";
+    process.env.PAYROOST_APP_URL = "https://app.payroost.example";
+    delete process.env.NEXT_PUBLIC_APP_URL;
 
     // Default cookie setup
     mockCookieStore.get.mockImplementation((name: string) => {
@@ -429,8 +436,14 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
   });
 
   afterEach(() => {
-    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
-    process.env.TRUST_PROXY = originalTrustProxy;
+    if (originalNodeEnv === undefined) delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    else (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
+    if (originalTrustProxy === undefined) delete process.env.TRUST_PROXY;
+    else process.env.TRUST_PROXY = originalTrustProxy;
+    if (originalAppUrl === undefined) delete process.env.PAYROOST_APP_URL;
+    else process.env.PAYROOST_APP_URL = originalAppUrl;
+    if (originalNextPublicAppUrl === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+    else process.env.NEXT_PUBLIC_APP_URL = originalNextPublicAppUrl;
     vi.restoreAllMocks();
   });
 
@@ -1517,6 +1530,65 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
       const body = await response.json();
       expect(body.error).toBe("SELLER_PAYER_ID_MISSING");
       expect(mockPayPalPost).not.toHaveBeenCalled();
+    });
+
+    it("ignores hostile origin/host/forwarded headers and builds PayPal return_url/cancel_url strictly from canonical app URL", async () => {
+      process.env.PAYROOST_APP_URL = "https://portal.payroost.com///";
+      const createOrderSpy = vi.spyOn(PayPalClient.prototype, "createPlatformOrder");
+
+      const { request, context } = createOrderRequest({
+        headers: {
+          origin: "https://evil-phishing.example",
+          host: "attacker.example",
+          "x-forwarded-host": "spoofed.proxy.example",
+          "x-forwarded-proto": "http",
+        },
+      });
+
+      const response = await createOrderPost(request, context);
+      expect(response.status).toBe(201);
+
+      expect(createOrderSpy).toHaveBeenCalledTimes(1);
+      const callArgs = createOrderSpy.mock.calls[0]?.[0];
+      expect(callArgs?.returnUrl).toBe(
+        `https://portal.payroost.com/portal/${encodeURIComponent(validToken)}?payment_intent_id=${encodeURIComponent(validIntentId)}&payment_status=approved`
+      );
+      expect(callArgs?.cancelUrl).toBe(
+        `https://portal.payroost.com/portal/${encodeURIComponent(validToken)}?payment_intent_id=${encodeURIComponent(validIntentId)}&payment_status=cancelled`
+      );
+      expect(JSON.stringify(mockPayPalPost.mock.calls[0]?.[1])).not.toContain("evil-phishing");
+      expect(JSON.stringify(mockPayPalPost.mock.calls[0]?.[1])).not.toContain("attacker.example");
+      expect(JSON.stringify(mockPayPalPost.mock.calls[0]?.[1])).not.toContain("spoofed.proxy.example");
+    });
+
+    it("fails closed with 503 CONFIGURATION_UNAVAILABLE and releases lease in production when canonical app URL is missing", async () => {
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+      delete process.env.PAYROOST_APP_URL;
+      delete process.env.NEXT_PUBLIC_APP_URL;
+      mockCookieStore.get.mockImplementation((name: string) => {
+        if (name === PORTAL_SESSION_COOKIE_NAME_PROD) {
+          return { name, value: validRawSessionToken };
+        }
+        return undefined;
+      });
+
+      const { request, context } = createOrderRequest({
+        headers: {
+          origin: "https://attacker.example",
+          "x-forwarded-host": "attacker.example",
+        },
+      });
+      const response = await createOrderPost(request, context);
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect((await response.json()).error).toBe("CONFIGURATION_UNAVAILABLE");
+      expect(mockPayPalPost).not.toHaveBeenCalled();
+      expect(mockRpc).toHaveBeenCalledWith("release_order_creation_lease", {
+        p_session_token_hash: validSessionTokenHash,
+        p_payment_intent_id: validIntentId,
+        p_lease_token: validLeaseToken,
+      });
     });
   });
 });

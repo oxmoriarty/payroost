@@ -139,7 +139,7 @@ export async function POST(
     await supabase.from("activity_events").insert({
       project_id: projectId,
       actor_user_id: user.id,
-      actor_label: user.email ? `Freelancer (${user.email})` : "Freelancer",
+      actor_label: "Freelancer",
       event_type: "portal.invited",
       summary: "Sent verified Client Portal invitation link",
       metadata: { expiresAt },

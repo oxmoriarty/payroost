@@ -105,4 +105,40 @@ describe("Project History Mapper & Audience Privacy Filtering", () => {
     expect(items[2]?.stateDisciplineBadge).toBe("Order Approved (Not Captured)");
     expect(items[3]?.stateDisciplineBadge).toBe("Deliverables Accepted (Payment Separate)");
   });
+
+  it("suppresses unmapped/unknown operational events from client history so raw internal summary text cannot leak", () => {
+    const events = [
+      {
+        id: "e-unknown-op",
+        project_id: projectId,
+        actor_label: "Operator (internal@payroost.dev)",
+        event_type: "system.paypal_debug_retry",
+        summary: "Internal token debug stack trace for merchant MCH-SECRET-99",
+        metadata: { debugPayload: "sensitive" },
+        created_at: "2026-11-11T11:00:00.000Z",
+      },
+      {
+        id: "e-client-safe",
+        project_id: projectId,
+        actor_label: "Freelancer (owner@agency.example)",
+        event_type: "portal.invited",
+        summary: "Sent verified Client Portal invitation link",
+        metadata: {},
+        created_at: "2026-11-11T11:05:00.000Z",
+      },
+    ];
+
+    const freelancerHistory = mapActivityEventsToHistoryItems(events, "freelancer");
+    expect(freelancerHistory).toHaveLength(2);
+    expect(freelancerHistory[0]?.eventType).toBe("system.paypal_debug_retry");
+    expect(freelancerHistory[0]?.summary).toContain("MCH-SECRET-99");
+
+    const clientHistory = mapActivityEventsToHistoryItems(events, "client");
+    expect(clientHistory).toHaveLength(1);
+    expect(clientHistory[0]?.eventType).toBe("portal.invited");
+    expect(clientHistory[0]?.actorLabel).toBe("Freelancer");
+    expect(JSON.stringify(clientHistory)).not.toContain("MCH-SECRET-99");
+    expect(JSON.stringify(clientHistory)).not.toContain("system.paypal_debug_retry");
+    expect(JSON.stringify(clientHistory)).not.toContain("owner@agency.example");
+  });
 });
