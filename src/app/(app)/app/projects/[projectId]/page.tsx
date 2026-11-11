@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, AlertTriangle, ShieldCheck } from "lucide-react";
 import { getProjectWorkspace } from "@/features/projects/data";
 import { AgreementEditor } from "@/features/agreements/agreement-editor";
+import { agreementDraftSchema } from "@/features/agreements/schema";
+import { MilestonePlanner } from "@/features/milestones/milestone-planner";
 import { ResendVerificationButton } from "@/features/projects/resend-verification-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -20,9 +22,20 @@ export default async function ProjectWorkspacePage({
     notFound();
   }
 
-  const { project, versions, activities } = workspace;
+  const { project, agreement, versions, milestones, activities } = workspace;
   const isClientVerified = Boolean(project.client_email_verified_at);
   const canUseAi = Boolean(process.env.GEMINI_API_KEY);
+  const currentVersion =
+    versions.find((v) => v.id === agreement?.current_version_id) ?? versions[0] ?? null;
+  const approvedVersion = versions.find((v) => v.status === "APPROVED") ?? null;
+  const draftVersion = versions.find((v) => v.status === "DRAFT") ?? null;
+  const parsedApproved = approvedVersion
+    ? agreementDraftSchema.safeParse(approvedVersion.content)
+    : null;
+  const parsedDraft = draftVersion
+    ? agreementDraftSchema.safeParse(draftVersion.content)
+    : null;
+  const agreementEditorKey = `${agreement?.current_version_id ?? "none"}-${versions[0]?.updated_at ?? "none"}-${milestones.length}`;
 
   return (
     <div className="space-y-8">
@@ -86,8 +99,26 @@ export default async function ProjectWorkspacePage({
         </div>
       </Card>
 
+      {/* Standalone Milestone Planner (AI-4) */}
+      <MilestonePlanner
+        projectId={project.id}
+        projectCurrency={project.currency}
+        confirmedBudgetMinor={project.total_amount_minor}
+        agreementStatus={currentVersion?.status ?? agreement?.status ?? null}
+        currentVersionNumber={currentVersion?.version_number ?? null}
+        savedMilestones={milestones}
+        agreedVersionMilestones={
+          parsedApproved?.success ? parsedApproved.data.milestones : []
+        }
+        draftVersionMilestones={
+          parsedDraft?.success ? parsedDraft.data.milestones : []
+        }
+        canUseAi={canUseAi}
+      />
+
       {/* Agreement Editor with Verification Guard */}
       <AgreementEditor
+        key={agreementEditorKey}
         projectId={project.id}
         versions={versions}
         canUseAi={canUseAi}
