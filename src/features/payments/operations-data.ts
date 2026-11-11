@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { parseIntentPaymentMetadata } from "@/lib/paypal/payment-mode";
 
 export type PaymentIntentStatus =
   | "ORDER_CREATING"
@@ -26,6 +27,8 @@ export interface PaymentOperationRow {
   amountCanonical: string;
   currency: string;
   status: PaymentIntentStatus;
+  paymentMode?: "PLATFORM" | "MERCHANT";
+  payeeMerchantId?: string | null;
   providerOrderId: string | null;
   captureId: string | null;
   reconciliationReason: string | null;
@@ -93,6 +96,7 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       expected_amount_canonical,
       expected_currency,
       expected_merchant_id,
+      canonical_payload_json,
       provider_order_id,
       order_creation_lease_expires_at,
       capture_lease_expires_at,
@@ -141,6 +145,7 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     expected_amount_canonical: string;
     expected_currency: string;
     expected_merchant_id: string;
+    canonical_payload_json: unknown;
     provider_order_id: string | null;
     order_creation_lease_expires_at: string | null;
     capture_lease_expires_at: string | null;
@@ -225,6 +230,9 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     const isOwner = project?.owner_id === user.id;
     if (isOwner) userIsOwnerOfAny = true;
 
+    const parsedPaymentMeta = parseIntentPaymentMetadata(intent.canonical_payload_json);
+    const derivedPaymentMode = parsedPaymentMeta.valid ? parsedPaymentMeta.mode : undefined;
+
     // Find capture transaction if available
     const captureTx = transactions.find(
       (tx) => tx.payment_intent_id === intent.id && tx.transaction_type === "CAPTURE"
@@ -255,6 +263,8 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       amountCanonical: intent.expected_amount_canonical,
       currency: intent.expected_currency,
       status: intent.status,
+      paymentMode: derivedPaymentMode,
+      payeeMerchantId: intent.expected_merchant_id,
       providerOrderId: intent.provider_order_id,
       captureId: captureTx?.provider_reference_id || null,
       reconciliationReason: intent.reconciliation_reason,

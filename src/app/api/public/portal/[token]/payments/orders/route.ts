@@ -10,6 +10,7 @@ import {
   getPortalIpRateLimitKey,
 } from "@/lib/security/client-ip";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
+import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
 import { PayPalClient } from "@/lib/paypal/client";
 import { PayPalError } from "@/lib/paypal/types";
 import { verifyProjectSellerReadiness } from "@/features/payments/seller-verification";
@@ -632,8 +633,8 @@ export async function POST(
   if (isPlatformOrder) {
     // SEC-R21-01: In Platform mode, incomplete Platform Partner configuration MUST fail closed.
     // Zero silent fallback to legacy Merchant mode.
-    const partnerMerchantId = paypalEnv.partnerMerchantId?.trim();
-    if (!partnerMerchantId || partnerMerchantId.length < 3 || partnerMerchantId.length > 64) {
+    const modeConfigCheck = validatePayPalServerModeConfig(paypalEnv);
+    if (!modeConfigCheck.valid) {
       await serviceClient.rpc("release_order_creation_lease", {
         p_session_token_hash: authResult.sessionTokenHash,
         p_payment_intent_id: intent.id,
@@ -685,13 +686,31 @@ export async function POST(
     }
 
     const intentSellerPayerId =
-      typeof intentPayload.seller_payer_id === "string"
-        ? intentPayload.seller_payer_id
+      typeof intentPayload.seller_payer_id === "string" &&
+      intentPayload.seller_payer_id.trim().length > 0
+        ? intentPayload.seller_payer_id.trim()
         : undefined;
-    sellerPayerId =
-      intentSellerPayerId ??
-      sellerCheck.sellerPayerId ??
-      sellerCheck.sellerMerchantId;
+    if (!intentSellerPayerId || !sellerCheck.sellerPayerId) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("SELLER_PAYER_ID_MISSING", 409, {
+        "Cache-Control": "no-store",
+      });
+    }
+    if (intentSellerPayerId !== sellerCheck.sellerPayerId) {
+      await serviceClient.rpc("release_order_creation_lease", {
+        p_session_token_hash: authResult.sessionTokenHash,
+        p_payment_intent_id: intent.id,
+        p_lease_token: leaseToken,
+      });
+      return apiError("SELLER_IDENTITY_MISMATCH", 409, {
+        "Cache-Control": "no-store",
+      });
+    }
+    sellerPayerId = intentSellerPayerId;
 
     const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "payroost.com";
     const proto = request.headers.get("x-forwarded-proto") || "https";
@@ -835,11 +854,15 @@ export async function POST(
 
   if (isMinimalRepresentation) {
     try {
+      if (isPlatformOrder && !sellerPayerId) {
+        throw new Error("Missing seller payer_id for Platform minimal-representation inquiry");
+      }
+
       const getRes = isPlatformOrder
         ? await paypalClient.get<PayPalOrderResponse>(
             `/v2/checkout/orders/${encodeURIComponent(orderId)}`,
             {
-              authAssertion: { payerId: sellerPayerId || intent.expected_merchant_id },
+              authAssertion: { payerId: sellerPayerId! },
               ...(paypalEnv.partnerAttributionId
                 ? { partnerAttributionId: paypalEnv.partnerAttributionId }
                 : {}),

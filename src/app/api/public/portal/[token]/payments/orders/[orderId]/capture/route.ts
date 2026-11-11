@@ -12,6 +12,13 @@ import {
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
 import { PayPalError } from "@/lib/paypal/types";
+import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
+import {
+  resolveCapturePaymentContext,
+  executePayPalOrderGet,
+  executePayPalOrderPostCapture,
+  verifyPreCaptureOrderAndRecoverIfCompleted,
+} from "@/features/payments/capture-helpers";
 import { apiError } from "@/lib/http";
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{20,128}$/;
@@ -341,11 +348,8 @@ export async function POST(
     });
   }
 
-  if (
-    !paypalEnv.expectedMerchantId ||
-    paypalEnv.expectedMerchantId.length < 3 ||
-    paypalEnv.expectedMerchantId.length > 64
-  ) {
+  const serverModeValidation = validatePayPalServerModeConfig(paypalEnv);
+  if (!serverModeValidation.valid) {
     return apiError("CONFIGURATION_ERROR", 500, {
       "Cache-Control": "no-store",
     });
@@ -355,7 +359,7 @@ export async function POST(
   const { data: intent, error: intentError } = await serviceClient
     .from("payment_intents")
     .select(
-      "id, project_id, milestone_id, agreement_version_id, status, expected_merchant_id, expected_currency, expected_amount_canonical, expected_amount_cents, capture_idempotency_key, provider_order_id, capture_lease_expires_at, created_at"
+      "id, project_id, milestone_id, agreement_version_id, status, expected_merchant_id, expected_currency, expected_amount_canonical, expected_amount_cents, capture_idempotency_key, canonical_payload_json, provider_order_id, capture_lease_expires_at, created_at"
     )
     .eq("provider_order_id", cleanOrderId)
     .maybeSingle();
@@ -483,6 +487,47 @@ export async function POST(
     });
   }
 
+  // 14.5 Resolve Mode-Aware Capture Context & Seller Verification (Fail-Closed)
+  const captureCtxResult = await resolveCapturePaymentContext({
+    intent,
+    paypalEnv,
+    serviceClient,
+    requireLiveSellerReady: true,
+  });
+  if (!captureCtxResult.ok) {
+    return NextResponse.json(
+      {
+        error: captureCtxResult.error,
+        message: captureCtxResult.message,
+      },
+      {
+        status: captureCtxResult.httpStatus,
+        headers: { "Cache-Control": "no-store" },
+      }
+    );
+  }
+  const captureCtx = captureCtxResult.context;
+
+  // 14.6 Pre-Capture Approval Verification & Fenced Completed-Order Recovery (GET)
+  const paypalClient = new PayPalClient(paypalEnv);
+  const preCaptureCheck = await verifyPreCaptureOrderAndRecoverIfCompleted({
+    paypalClient,
+    serviceClient,
+    cleanOrderId,
+    sessionTokenHash: authResult.sessionTokenHash,
+    intent: {
+      id: intent.id,
+      milestone_id: intent.milestone_id,
+      expected_currency: intent.expected_currency,
+      expected_amount_canonical: intent.expected_amount_canonical,
+      expected_amount_cents: intent.expected_amount_cents,
+    },
+    captureCtx,
+  });
+  if (!preCaptureCheck.proceedToCapture) {
+    return preCaptureCheck.response;
+  }
+
   // 15. Atomically Claim Capture Lease with Row Lock and Fencing Token
   const { data: claimData, error: claimError } = await serviceClient.rpc(
     "claim_order_capture_lease",
@@ -562,7 +607,6 @@ export async function POST(
   }
 
   const leaseToken = claimResult.lease_token;
-  const paypalClient = new PayPalClient(paypalEnv);
 
   // 16. Execute Official PayPal Orders v2 Capture Request
   let captureResponse: PayPalOrderCaptureResponse | null = null;
@@ -571,17 +615,14 @@ export async function POST(
     CAPTURE_RECONCILIATION_REASONS.PAYPAL_CAPTURE_TIMEOUT;
 
   try {
-    const res = await paypalClient.post<PayPalOrderCaptureResponse>(
-      `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}/capture`,
-      {},
-      {
-        paypalRequestId: intent.capture_idempotency_key,
-        headers: {
-          Prefer: "return=representation",
-        },
-      }
+    const res = await executePayPalOrderPostCapture(
+      paypalClient,
+      cleanOrderId,
+      intent.capture_idempotency_key,
+      captureCtx,
+      true
     );
-    captureResponse = res.data;
+    captureResponse = res.data as PayPalOrderCaptureResponse;
   } catch (err: unknown) {
     if (err instanceof PayPalError) {
       // 422 with ORDER_ALREADY_CAPTURED: another worker or retry captured the order earlier
@@ -632,11 +673,9 @@ export async function POST(
   // 17. Ambiguous Outcome Recovery: Query GET /v2/checkout/orders/{id}
   if (ambiguousOutcome || !captureResponse) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderCaptureResponse>(
-        `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`
-      );
+      const getRes = await executePayPalOrderGet(paypalClient, cleanOrderId, captureCtx);
 
-      const orderDetails = getRes.data;
+      const orderDetails = getRes.data as PayPalOrderCaptureResponse;
       const captures = orderDetails?.purchase_units?.[0]?.payments?.captures;
 
       if (orderDetails && captures && captures.length > 0) {
@@ -692,13 +731,11 @@ export async function POST(
 
   if (isMinimal) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderCaptureResponse>(
-        `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`
-      );
+      const getRes = await executePayPalOrderGet(paypalClient, cleanOrderId, captureCtx);
       if (!getRes || !getRes.data) {
         throw new Error("Empty GET order response");
       }
-      captureResponse = getRes.data;
+      captureResponse = getRes.data as PayPalOrderCaptureResponse;
     } catch {
       await serviceClient.rpc("mark_intent_capture_reconciliation_required", {
         p_session_token_hash: authResult.sessionTokenHash,
@@ -716,7 +753,7 @@ export async function POST(
   const validation = validateCapturePayload(captureResponse, {
     intentId: intent.id,
     milestoneId: intent.milestone_id,
-    expectedMerchantId: paypalEnv.expectedMerchantId,
+    expectedMerchantId: captureCtx.authoritativeExpectedMerchantId,
     expectedAmountCanonical: intent.expected_amount_canonical,
     orderId: cleanOrderId,
   });
@@ -752,7 +789,7 @@ export async function POST(
       p_provider_capture_id: capture.id.trim(),
       p_capture_status: capture.status.toUpperCase(),
       p_amount_cents: intent.expected_amount_cents,
-      p_payee_merchant_id: paypalEnv.expectedMerchantId,
+      p_payee_merchant_id: captureCtx.authoritativeExpectedMerchantId,
       p_raw_capture_response: captureResponse,
     }
   );

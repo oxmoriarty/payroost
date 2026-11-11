@@ -10,6 +10,7 @@ import {
   getPortalIpRateLimitKey,
 } from "@/lib/security/client-ip";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
+import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
 import { verifyProjectSellerReadiness } from "@/features/payments/seller-verification";
 import { apiError } from "@/lib/http";
 
@@ -349,8 +350,8 @@ export async function POST(
   if (paymentMode === "PLATFORM") {
     // SEC-R21-01: In Platform mode, incomplete Platform Partner configuration MUST fail closed.
     // Zero silent fallback to legacy Merchant mode.
-    const partnerMerchantId = paypalEnv.partnerMerchantId?.trim();
-    if (!partnerMerchantId || partnerMerchantId.length < 3 || partnerMerchantId.length > 64) {
+    const modeConfigCheck = validatePayPalServerModeConfig(paypalEnv);
+    if (!modeConfigCheck.valid) {
       return apiError("CONFIGURATION_ERROR", 500, {
         "Cache-Control": "no-store",
       });
@@ -375,7 +376,12 @@ export async function POST(
     }
 
     expectedMerchantId = sellerCheck.sellerMerchantId;
-    sellerPayerId = sellerCheck.sellerPayerId || sellerCheck.sellerMerchantId;
+    if (!sellerCheck.sellerPayerId) {
+      return apiError("SELLER_PAYER_ID_MISSING", 409, {
+        "Cache-Control": "no-store",
+      });
+    }
+    sellerPayerId = sellerCheck.sellerPayerId;
   } else {
     // Explicit legacy Merchant checkout mode (Phase 3B.3/3B.4 compatibility)
     expectedMerchantId = paypalEnv.expectedMerchantId;

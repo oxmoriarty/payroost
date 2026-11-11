@@ -246,11 +246,12 @@ describe("Phase 3B.5.1: Client Portal Entry & Authentication View", () => {
 describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
-    delete window.paypal;
+    sessionStorage.clear();
   });
 
   // Scenario 1: No payable milestones
@@ -317,7 +318,7 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
     expect(screen.getByText(/Pay with PayPal \(\$2,500.00\)/i)).toBeInTheDocument();
   });
 
-  // Scenario 4: Refresh during checkout (in-progress state restored)
+  // Scenario 4: Refresh during checkout (in-progress state + cached HATEOAS approvalUrl restored)
   it("Scenario 4: restores in-progress intent and order IDs after page refresh during checkout", async () => {
     const inProgressMilestone: PortalMilestone = {
       ...samplePayableMilestone1,
@@ -326,26 +327,33 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
       providerOrderId: "ORDER-RESTORED-222",
     };
 
-    const mockButtonsRender = vi.fn().mockResolvedValue(undefined);
-    window.paypal = {
-      Buttons: vi.fn(() => ({
-        render: mockButtonsRender,
-      })),
-    };
+    sessionStorage.setItem(
+      `payroost_paypal_approval_${mockToken}_ORDER-RESTORED-222`,
+      "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-RESTORED-222"
+    );
+
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+    const mockRedirect = vi.fn();
 
     render(
       <MilestoneCheckout
         token={mockToken}
         milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={mockRedirect}
       />
     );
 
-    // Clicks Pay with PayPal; should skip intent and order creation and directly render buttons
     fireEvent.click(screen.getByText(/Pay with PayPal/i));
 
     await waitFor(() => {
-      expect(mockButtonsRender).toHaveBeenCalled();
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-RESTORED-222"
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(screen.getByText("Complete Approval on PayPal")).toBeInTheDocument();
+      expect(screen.getByText("Continue to PayPal Approval")).toBeInTheDocument();
     });
   });
 
@@ -371,6 +379,7 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
         token={mockToken}
         milestone={samplePayableMilestone1}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={vi.fn()}
       />
     );
 
@@ -398,22 +407,19 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
         success: true,
         orderId: "ORDER-NEW-666",
         paymentIntentId: "existing-intent-555",
+        approvalUrl: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-NEW-666",
       }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const mockButtonsRender = vi.fn().mockResolvedValue(undefined);
-    window.paypal = {
-      Buttons: vi.fn(() => ({
-        render: mockButtonsRender,
-      })),
-    };
+    const mockRedirect = vi.fn();
 
     render(
       <MilestoneCheckout
         token={mockToken}
         milestone={milestoneWithIntent}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={mockRedirect}
       />
     );
 
@@ -435,191 +441,163 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
           }),
         })
       );
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-NEW-666"
+      );
     });
   });
 
-  // Scenario 7: Existing PayPal order reused
-  it("Scenario 7: reuses existing PayPal order and avoids order recreation", async () => {
+  // Scenario 7: Existing PayPal order reused via server HATEOAS link resolution
+  it("Scenario 7: reuses existing PayPal order without calling /payments/intents and redirects using HATEOAS approvalUrl", async () => {
     const milestoneWithOrder: PortalMilestone = {
       ...samplePayableMilestone1,
       paymentIntentId: "existing-intent-777",
       providerOrderId: "ORDER-ALREADY-CREATED-888",
     };
 
-    const mockFetch = vi.fn();
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        orderId: "ORDER-ALREADY-CREATED-888",
+        paymentIntentId: "existing-intent-777",
+        approvalUrl: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-ALREADY-CREATED-888",
+        reused: true,
+      }),
+    });
     vi.stubGlobal("fetch", mockFetch);
 
-    const mockButtonsRender = vi.fn().mockResolvedValue(undefined);
-    window.paypal = {
-      Buttons: vi.fn(() => ({
-        render: mockButtonsRender,
-      })),
-    };
+    const mockRedirect = vi.fn();
 
     render(
       <MilestoneCheckout
         token={mockToken}
         milestone={milestoneWithOrder}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={mockRedirect}
       />
     );
 
     fireEvent.click(screen.getByText(/Pay with PayPal/i));
 
     await waitFor(() => {
-      expect(mockFetch).not.toHaveBeenCalled();
-      expect(mockButtonsRender).toHaveBeenCalled();
-    });
-  });
-
-  // Scenario 8: PayPal SDK loading failure & retry
-  it("Scenario 8: handles PayPal SDK loading failure gracefully and supports retry", async () => {
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-sdk-test" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-SDK-TEST" }),
-      });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const originalAppendChild = document.body.appendChild.bind(document.body);
-    let shouldFail = true;
-
-    const appendSpy = vi.spyOn(document.body, "appendChild").mockImplementation((node) => {
-      if (node instanceof HTMLScriptElement && node.id === "paypal-sdk-script") {
-        setTimeout(() => {
-          if (shouldFail) {
-            node.onerror?.(new Event("error"));
-          } else {
-            window.paypal = {
-              Buttons: vi.fn(() => ({
-                render: vi.fn().mockResolvedValue(undefined),
-              })),
-            };
-            node.onload?.(new Event("load"));
-          }
-        }, 10);
-        return node;
-      }
-      return originalAppendChild(node);
-    });
-
-    try {
-      render(
-        <MilestoneCheckout
-          token={mockToken}
-          milestone={samplePayableMilestone1}
-          csrfToken={mockCsrfToken}
-        />
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        expect.stringContaining("/payments/intents"),
+        expect.anything()
       );
-
-      fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
-      await waitFor(() => {
-        expect(screen.getByText(/Unable to load PayPal Checkout/i)).toBeInTheDocument();
-        expect(screen.getByText(/Retry Loading Checkout/i)).toBeInTheDocument();
-      });
-
-      // Now retry with successful script load
-      shouldFail = false;
-      const existingScript = document.getElementById("paypal-sdk-script");
-      if (existingScript) existingScript.remove();
-
-      fireEvent.click(screen.getByText(/Retry Loading Checkout/i));
-
-      await waitFor(() => {
-        expect(screen.queryByText(/Unable to load PayPal Checkout/i)).not.toBeInTheDocument();
-      });
-    } finally {
-      appendSpy.mockRestore();
-    }
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-ALREADY-CREATED-888"
+      );
+    });
   });
 
-  // Scenario 9: Buyer cancellation (onCancel)
-  it("Scenario 9: handles buyer cancellation in PayPal popup and displays non-blocking notice", async () => {
-    let capturedOnCancel: (() => void) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnCancel = config.onCancel;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
-    };
-
+  // Scenario 8: Missing approval link handling & retry
+  it("Scenario 8: handles missing PayPal approval link gracefully and supports retry without injecting PayPal JS SDK", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-cancel-test" }),
+        json: async () => ({ success: true, paymentIntentId: "intent-hateoas-retry" }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-CANCEL-TEST" }),
+        json: async () => ({ success: true, orderId: "ORDER-NO-LINK" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          orderId: "ORDER-NO-LINK",
+          approvalUrl: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-NO-LINK",
+        }),
       });
     vi.stubGlobal("fetch", mockFetch);
+
+    const mockRedirect = vi.fn();
 
     render(
       <MilestoneCheckout
         token={mockToken}
         milestone={samplePayableMilestone1}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={mockRedirect}
       />
     );
 
     fireEvent.click(screen.getByText(/Pay with PayPal/i));
 
     await waitFor(() => {
-      expect(capturedOnCancel).not.toBeNull();
+      expect(
+        screen.getByText(/PayPal approval link was not returned for this order. Please retry checkout/i)
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Retry Checkout/i })).toBeInTheDocument();
     });
 
-    // Simulate user closing / cancelling inside PayPal popup
-    capturedOnCancel!();
+    expect(document.getElementById("paypal-sdk-script")).toBeNull();
+    expect((window as unknown as { paypal?: unknown }).paypal).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /Retry Checkout/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Checkout was cancelled in PayPal. You can retry when ready/i)
-      ).toBeInTheDocument();
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-NO-LINK"
+      );
     });
   });
 
-  // Scenario 10: Successful server-confirmed capture
-  it("Scenario 10: executes server-side capture upon buyer approval and displays confirmed status", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+  // Scenario 9: Buyer cancellation via cancel_url return query params
+  it("Scenario 9: handles buyer cancellation return state and displays non-blocking notice", async () => {
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-cancel-test",
+      providerOrderId: "ORDER-CANCEL-TEST",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-ok-123" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-OK-456" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          status: "COMPLETED",
-          captureId: "CAP-CONFIRMED-999",
-          orderId: "ORDER-OK-456",
-        }),
-      });
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MilestoneCheckout
+        token={mockToken}
+        milestone={inProgressMilestone}
+        csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-cancel-test",
+          paymentStatus: "cancelled",
+          orderToken: "ORDER-CANCEL-TEST",
+        }}
+        onRedirectToPayPal={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/PayPal checkout was cancelled before payment approval. You can resume or retry when ready/i)
+      ).toBeInTheDocument();
+    });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // Scenario 10: Successful server-confirmed capture upon approved PayPal return redirect
+  it("Scenario 10: executes server-side capture upon PayPal return approval and displays confirmed status", async () => {
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-ok-123",
+      providerOrderId: "ORDER-OK-456",
+    };
+
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        status: "COMPLETED",
+        captureId: "CAP-CONFIRMED-999",
+        orderId: "ORDER-OK-456",
+      }),
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     const onPaymentSuccessMock = vi.fn();
@@ -627,21 +605,27 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-ok-123",
+          paymentStatus: "approved",
+          orderToken: "ORDER-OK-456",
+        }}
         onPaymentSuccess={onPaymentSuccessMock}
       />
     );
 
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
     await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
-    });
-
-    await capturedOnApprove!({ orderID: "ORDER-OK-456" });
-
-    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/public/portal/${encodeURIComponent(mockToken)}/payments/orders/ORDER-OK-456/capture`,
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            paymentIntentId: "intent-ok-123",
+          }),
+        })
+      );
       expect(screen.getByText("Payment Captured & Verified")).toBeInTheDocument();
       expect(screen.getByText("CAP-CONFIRMED-999")).toBeInTheDocument();
       expect(onPaymentSuccessMock).toHaveBeenCalledWith("CAP-CONFIRMED-999");
@@ -650,46 +634,28 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
 
   // Scenario 11: Capture timeout / network drop
   it("Scenario 11: transitions to PENDING_RECONCILIATION when network drops during capture", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-drop-123",
+      providerOrderId: "ORDER-DROP-456",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-drop-123" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-DROP-456" }),
-      })
-      // Network drop / abort during capture POST
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const mockFetch = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch"));
     vi.stubGlobal("fetch", mockFetch);
 
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-drop-123",
+          paymentStatus: "approved",
+          orderToken: "ORDER-DROP-456",
+        }}
       />
     );
-
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
-    await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
-    });
-
-    await capturedOnApprove!({ orderID: "ORDER-DROP-456" });
 
     await waitFor(() => {
       expect(screen.getByText("Payment Verification Pending")).toBeInTheDocument();
@@ -699,52 +665,34 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
 
   // Scenario 12: Ambiguous capture response
   it("Scenario 12: handles ambiguous or pending capture response safely", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-ambig",
+      providerOrderId: "ORDER-AMBIG",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-ambig" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-AMBIG" }),
-      })
-      // Capture returns 200 with status: "PENDING"
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          status: "PENDING",
-        }),
-      });
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        status: "PENDING",
+      }),
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-ambig",
+          paymentStatus: "approved",
+          orderToken: "ORDER-AMBIG",
+        }}
       />
     );
-
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
-    await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
-    });
-
-    await capturedOnApprove!({ orderID: "ORDER-AMBIG" });
 
     await waitFor(() => {
       expect(screen.getByText("Payment Verification Pending")).toBeInTheDocument();
@@ -754,57 +702,40 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
 
   // Scenario 13: Reconciliation-required response (409)
   it("Scenario 13: renders pending verification alert and blocks second payment on 409 RECONCILIATION_REQUIRED", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-recon",
+      providerOrderId: "ORDER-RECON",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-recon" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-RECON" }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({
-          error: "RECONCILIATION_REQUIRED",
-          message: "Payment requires authoritative reconciliation.",
-        }),
-      });
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error: "RECONCILIATION_REQUIRED",
+        message: "Payment requires authoritative reconciliation.",
+      }),
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-recon",
+          paymentStatus: "approved",
+          orderToken: "ORDER-RECON",
+        }}
       />
     );
-
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
-    await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
-    });
-
-    await capturedOnApprove!({ orderID: "ORDER-RECON" });
 
     await waitFor(() => {
       expect(screen.getByText("Payment Verification Pending")).toBeInTheDocument();
       expect(screen.getByText(/Do not attempt a second payment/i)).toBeInTheDocument();
-      expect(screen.getByText("Check Status")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Check Status/i })).toBeInTheDocument();
     });
   });
 
@@ -970,11 +901,12 @@ describe("Phase 3B.5.1: 20 Required Checkout & Workspace Scenarios", () => {
 describe("Phase 3B.5.1: Additional Financial & Lifecycle Invariants", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
-    delete window.paypal;
+    sessionStorage.clear();
   });
 
   it("permits safe retry for milestone with previously FAILED or CANCELLED intent (AUDIT-3B5-03)", async () => {
@@ -994,21 +926,20 @@ describe("Phase 3B.5.1: Additional Financial & Lifecycle Invariants", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true, orderId: "fresh-new-order-id" }),
+        json: async () => ({
+          success: true,
+          orderId: "fresh-new-order-id",
+          approvalUrl: "https://www.sandbox.paypal.com/checkoutnow?token=fresh-new-order-id",
+        }),
       });
     vi.stubGlobal("fetch", mockFetch);
-
-    window.paypal = {
-      Buttons: vi.fn(() => ({
-        render: vi.fn().mockResolvedValue(undefined),
-      })),
-    };
 
     render(
       <MilestoneCheckout
         token={mockToken}
         milestone={retryMilestone}
         csrfToken={mockCsrfToken}
+        onRedirectToPayPal={vi.fn()}
       />
     );
 
@@ -1023,169 +954,177 @@ describe("Phase 3B.5.1: Additional Financial & Lifecycle Invariants", () => {
     });
   });
 
-  it("guards against stale PayPal callback capturing an obsolete or mismatched order ID", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+  it("guards against stale or mismatched PayPal return order token before dispatching capture", async () => {
+    const milestoneWithExpectedOrder: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-match",
+      providerOrderId: "ORDER-EXPECTED-123",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-match" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-EXPECTED-123" }),
-      });
+    const mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
 
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={milestoneWithExpectedOrder}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-match",
+          paymentStatus: "approved",
+          orderToken: "ORDER-OBSOLETE-999",
+        }}
       />
     );
 
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
     await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
+      expect(
+        screen.getByText(
+          /Returned PayPal order reference does not match this milestone order. Payment was not captured./i
+        )
+      ).toBeInTheDocument();
     });
-
-    // Callback arrives with a mismatched / obsolete order ID
-    await capturedOnApprove!({ orderID: "ORDER-OBSOLETE-999" });
 
     // Capture endpoint must NOT be called for mismatched order
     expect(mockFetch).not.toHaveBeenCalledWith(
-      expect.stringContaining("/payments/capture"),
+      expect.stringContaining("/capture"),
       expect.anything()
     );
   });
 
-  it("unmounting component does not trigger a second capture or cancel background server operation", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-    const mockClose = vi.fn().mockResolvedValue(undefined);
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-          close: mockClose,
-        };
-      }),
+  it("does not duplicate capture on unmount and never injects single-merchant PayPal JS SDK", async () => {
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-unmount",
+      providerOrderId: "ORDER-UNMOUNT",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
+    const mockFetch = vi.fn().mockImplementationOnce(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+      return {
         ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-unmount" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-UNMOUNT" }),
-      })
-      .mockImplementationOnce(async () => {
-        // Slow server response
-        await new Promise((r) => setTimeout(r, 100));
-        return {
-          ok: true,
-          json: async () => ({ success: true, status: "COMPLETED", captureId: "CAP-LATE" }),
-        };
-      });
+        json: async () => ({
+          success: true,
+          status: "COMPLETED",
+          captureId: "CAP-LATE",
+        }),
+      };
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     const { unmount } = render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-unmount",
+          paymentStatus: "approved",
+          orderToken: "ORDER-UNMOUNT",
+        }}
       />
     );
 
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
     await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    // Initiate capture
-    const capturePromise = capturedOnApprove!({ orderID: "ORDER-UNMOUNT" });
-
-    // Component unmounts while capture is in flight
     unmount();
 
-    // Buttons close called
-    expect(mockClose).toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 120));
 
-    // Await completion of in-flight capture; should finish cleanly without error
-    await capturePromise;
-
-    // Capture was only dispatched once
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    // Capture was only dispatched once and no SDK script was ever injected
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("paypal-sdk-script")).toBeNull();
+    expect((window as unknown as { paypal?: unknown }).paypal).toBeUndefined();
   });
 
-  it("never marks milestone completed based solely on PayPal onApprove without server confirmation", async () => {
-    let capturedOnApprove: ((data: { orderID: string }) => Promise<void>) | null = null;
-
-    window.paypal = {
-      Buttons: vi.fn((config) => {
-        capturedOnApprove = config.onApprove;
-        return {
-          render: vi.fn().mockResolvedValue(undefined),
-        };
-      }),
+  it("never marks milestone completed based solely on approved PayPal return URL without server confirmation", async () => {
+    const inProgressMilestone: PortalMilestone = {
+      ...samplePayableMilestone1,
+      paymentStatus: "IN_PROGRESS",
+      paymentIntentId: "intent-auth-alone",
+      providerOrderId: "ORDER-AUTH-ALONE",
     };
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, paymentIntentId: "intent-auth-alone" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, orderId: "ORDER-AUTH-ALONE" }),
-      })
-      // Server capture returns 500 error
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: "SERVER_ERROR", message: "Ledger recording failed." }),
-      });
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "SERVER_ERROR", message: "Ledger recording failed." }),
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     render(
       <MilestoneCheckout
         token={mockToken}
-        milestone={samplePayableMilestone1}
+        milestone={inProgressMilestone}
         csrfToken={mockCsrfToken}
+        paymentReturn={{
+          paymentIntentId: "intent-auth-alone",
+          paymentStatus: "approved",
+          orderToken: "ORDER-AUTH-ALONE",
+        }}
       />
     );
-
-    fireEvent.click(screen.getByText(/Pay with PayPal/i));
-
-    await waitFor(() => {
-      expect(capturedOnApprove).not.toBeNull();
-    });
-
-    await capturedOnApprove!({ orderID: "ORDER-AUTH-ALONE" });
 
     await waitFor(() => {
       // Must NOT show completed status
       expect(screen.queryByText("Payment Captured & Verified")).not.toBeInTheDocument();
-      // Must show error
+      // Must show error from server
       expect(screen.getByText(/SERVER_ERROR/i)).toBeInTheDocument();
+    });
+  });
+
+  it("auto-opens matching milestone checkout drawer when returning from PayPal approval via initialPaymentReturn", async () => {
+    const projectReturningFromPayPal: PortalProjectData = {
+      ...sampleProjectData,
+      milestones: [
+        samplePaidMilestone,
+        {
+          ...samplePayableMilestone1,
+          paymentStatus: "IN_PROGRESS",
+          paymentIntentId: "intent-ws-return",
+          providerOrderId: "ORDER-WS-RETURN-1",
+          isPayable: true,
+        },
+        samplePayableMilestone2,
+      ],
+    };
+
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        status: "COMPLETED",
+        captureId: "CAP-WS-RETURN-99",
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <ClientPortalWorkspaceView
+        token={mockToken}
+        projectData={projectReturningFromPayPal}
+        csrfToken={mockCsrfToken}
+        initialPaymentReturn={{
+          paymentIntentId: "intent-ws-return",
+          paymentStatus: "approved",
+          orderToken: "ORDER-WS-RETURN-1",
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/public/portal/${encodeURIComponent(mockToken)}/payments/orders/ORDER-WS-RETURN-1/capture`,
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+      expect(screen.getByText("Payment Captured & Verified")).toBeInTheDocument();
+      expect(screen.getByText("CAP-WS-RETURN-99")).toBeInTheDocument();
     });
   });
 });

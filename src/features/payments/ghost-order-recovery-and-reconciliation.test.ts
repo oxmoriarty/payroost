@@ -69,6 +69,7 @@ describe("PayRoost Phase 3B.4.1.6: Ghost-Order Recovery & Reconciliation Authori
       clientId: "CLIENT_123",
       clientSecret: "SECRET_123",
       expectedMerchantId: validExpectedMerchantId,
+      paymentMode: "MERCHANT",
     };
 
     const validCanonicalPayload = {

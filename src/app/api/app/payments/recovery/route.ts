@@ -13,6 +13,10 @@ import {
 import { PayPalClient } from "@/lib/paypal/client";
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import {
+  resolveCapturePaymentContext,
+  executePayPalOrderGet,
+} from "@/features/payments/capture-helpers";
+import {
   PAYPAL_AUTOMATED_RETRY_CUTOFF_MS,
   type PayPalOrderResponse,
 } from "@/app/api/public/portal/[token]/payments/orders/route";
@@ -88,6 +92,8 @@ export async function POST(request: Request) {
       provider_order_id,
       order_idempotency_key,
       capture_idempotency_key,
+      canonical_payload_json,
+      expected_currency,
       order_creation_lease_expires_at,
       capture_lease_expires_at,
       expected_merchant_id,
@@ -354,13 +360,34 @@ export async function POST(request: Request) {
 
       // Branch A: Provider Order ID is known — Authoritative PayPal Inquiry
       if (intent.provider_order_id) {
+        const ctxResult = await resolveCapturePaymentContext({
+          intent: {
+            id: intent.id,
+            project_id: intent.project_id,
+            milestone_id: intent.milestone_id,
+            expected_amount_cents: intent.expected_amount_cents,
+            expected_currency: intent.expected_currency,
+            expected_merchant_id: intent.expected_merchant_id,
+            canonical_payload_json: intent.canonical_payload_json,
+          },
+          paypalEnv: paypalConfig,
+          serviceClient,
+          requireLiveSellerReady: false,
+        });
+
+        if (!ctxResult.ok) {
+          return apiError(ctxResult.error, ctxResult.httpStatus);
+        }
+
         let orderDetails: PayPalOrderResponse;
         try {
-          const getRes = await paypalClient.get<PayPalOrderResponse>(
-            `/v2/checkout/orders/${encodeURIComponent(intent.provider_order_id)}`
+          const getRes = await executePayPalOrderGet(
+            paypalClient,
+            intent.provider_order_id,
+            ctxResult.context
           );
           if (!getRes?.data) throw new Error("Empty provider response");
-          orderDetails = getRes.data;
+          orderDetails = getRes.data as PayPalOrderResponse;
         } catch {
           return apiError("PROVIDER_INQUIRY_FAILED", 502);
         }

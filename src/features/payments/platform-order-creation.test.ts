@@ -62,6 +62,7 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
     clientSecret: "CLIENT_SECRET_123",
     expectedMerchantId: "DEFAULT_MERCHANT_123",
     platformClientId: validPlatformClientId,
+    platformClientSecret: "PLATFORM_CLIENT_SECRET_XYZ",
     partnerMerchantId: validPlatformPartnerId,
     partnerAttributionId: validPartnerBnCode,
     paymentMode: "PLATFORM",
@@ -736,6 +737,7 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
       const client = new PayPalClient(validPlatformConfig);
       const params = {
         sellerMerchantId: validSellerMerchantId,
+        sellerPayerId: validSellerMerchantId,
         milestoneId: validMilestoneId,
         paymentIntentId: validIntentId,
         amountCanonical: "1500.00",
@@ -1462,6 +1464,59 @@ describe("Phase 3B.R2: PayPal Platform Multi-Party Order Creation", () => {
       const [, , options] = mockPayPalPost.mock.calls[0];
       expect(options.authAssertion).toBeUndefined();
       expect(options.partnerAttributionId).toBeUndefined();
+    });
+
+    it("fails closed in PayPalClient.createPlatformOrder when sellerPayerId is missing instead of falling back to sellerMerchantId", async () => {
+      const mockAuth = { getAccessToken: vi.fn().mockResolvedValue("mock_platform_token") };
+      const client = new PayPalClient(validPlatformConfig, mockAuth as unknown as PayPalAuthManager);
+
+      await expect(
+        client.createPlatformOrder({
+          sellerMerchantId: validSellerMerchantId,
+          sellerPayerId: "",
+          milestoneId: validMilestoneId,
+          paymentIntentId: validIntentId,
+          amountCanonical: "1500.00",
+          idempotencyKey: "k0000000-0000-4000-a000-000000000009",
+          returnUrl: "https://payroost.com/return",
+          cancelUrl: "https://payroost.com/cancel",
+        })
+      ).rejects.toMatchObject({
+        errorName: "INVALID_SELLER_PAYER_ID",
+        status: 400,
+      });
+
+      expect(mockPayPalPost).not.toHaveBeenCalled();
+    });
+
+    it("fails closed with 409 SELLER_PAYER_ID_MISSING during order creation when Platform intent lacks seller_payer_id", async () => {
+      mockPaymentIntentResult = {
+        data: {
+          ...((mockPaymentIntentResult as { data: Record<string, unknown> }).data),
+          canonical_payload_json: {
+            purchase_units: [
+              {
+                reference_id: validMilestoneId,
+                custom_id: validIntentId,
+                amount: { currency_code: "USD", value: "1500.00" },
+                payee: { merchant_id: validSellerMerchantId },
+              },
+            ],
+            payment_mode: "PLATFORM",
+            seller_merchant_id: validSellerMerchantId,
+            // Intentionally omitting seller_payer_id
+          },
+        },
+        error: null,
+      };
+
+      const { request, context } = createOrderRequest({});
+      const response = await createOrderPost(request, context);
+
+      expect(response.status).toBe(409);
+      const body = await response.json();
+      expect(body.error).toBe("SELLER_PAYER_ID_MISSING");
+      expect(mockPayPalPost).not.toHaveBeenCalled();
     });
   });
 });

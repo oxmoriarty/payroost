@@ -3,6 +3,12 @@ import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
 import type { PayPalConfig } from "@/lib/paypal/types";
 import { PayPalOrderResponse } from "@/app/api/public/portal/[token]/payments/orders/route";
+import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
+import {
+  resolveCapturePaymentContext,
+  executePayPalOrderGet,
+  executePayPalCreateOrderReplay,
+} from "@/features/payments/capture-helpers";
 
 /**
  * PayPal Orders v2 documented idempotency retention window: 6 hours (21,600,000 ms).
@@ -62,6 +68,21 @@ export async function reconcilePaymentIntentServerSide(params: {
       error: `CONFIGURATION_ERROR: ${err instanceof Error ? err.message : "Invalid PayPal environment"}`,
     };
   }
+
+  const serverValidation = validatePayPalServerModeConfig(paypalEnv);
+  if (!serverValidation.valid) {
+    return {
+      success: false,
+      intentId: params.intentId,
+      previousStatus: "UNKNOWN",
+      resultingStatus: "UNKNOWN",
+      providerOrderId: null,
+      recovered: false,
+      milestoneBlocked: true,
+      error: `CONFIGURATION_ERROR: ${serverValidation.reason}`,
+    };
+  }
+
   const paypalClient = params.injectedPayPalClient ?? new PayPalClient(paypalEnv);
   const actor = params.actorLabel ?? "system_reconciliation_service";
 
@@ -108,6 +129,37 @@ export async function reconcilePaymentIntentServerSide(params: {
     };
   }
 
+  const parsedAmountCents = Math.round(Number(intent.expected_amount_canonical) * 100);
+  const captureCtxResult = await resolveCapturePaymentContext({
+    intent: {
+      id: intent.id,
+      project_id: intent.project_id,
+      milestone_id: intent.milestone_id,
+      expected_amount_cents: Number.isFinite(parsedAmountCents) ? parsedAmountCents : 0,
+      expected_currency: intent.expected_currency,
+      expected_merchant_id: intent.expected_merchant_id,
+      canonical_payload_json: intent.canonical_payload_json,
+    },
+    paypalEnv,
+    serviceClient,
+    requireLiveSellerReady: false,
+  });
+
+  if (!captureCtxResult.ok) {
+    return {
+      success: false,
+      intentId: intent.id,
+      previousStatus: intent.status,
+      resultingStatus: intent.status,
+      providerOrderId: intent.provider_order_id ?? null,
+      recovered: false,
+      milestoneBlocked: true,
+      error: captureCtxResult.error,
+      reason: captureCtxResult.message,
+    };
+  }
+  const captureCtx = captureCtxResult.context;
+
   const intentCreatedAtMs = intent.created_at ? new Date(intent.created_at).getTime() : Date.now();
   const intentAgeMs = Date.now() - intentCreatedAtMs;
 
@@ -117,13 +169,15 @@ export async function reconcilePaymentIntentServerSide(params: {
   if (intent.provider_order_id) {
     let orderDetails: PayPalOrderResponse;
     try {
-      const getRes = await paypalClient.get<PayPalOrderResponse>(
-        `/v2/checkout/orders/${encodeURIComponent(intent.provider_order_id)}`
+      const getRes = await executePayPalOrderGet(
+        paypalClient,
+        intent.provider_order_id,
+        captureCtx
       );
       if (!getRes || !getRes.data) {
         throw new Error("Empty provider response");
       }
-      orderDetails = getRes.data;
+      orderDetails = getRes.data as PayPalOrderResponse;
     } catch {
       // Inconclusive: Provider inquiry failed; mark RECONCILIATION_REQUIRED if in CAPTURING
       if (intent.status === "CAPTURING") {
@@ -249,6 +303,42 @@ export async function reconcilePaymentIntentServerSide(params: {
       const captureStatus = capture?.status?.toUpperCase();
 
       if (capture && capture.id && captureStatus === "COMPLETED") {
+        const capturePayeeMerchant =
+          capture.payee?.merchant_id?.trim() ?? pu?.payee?.merchant_id?.trim();
+        const isPayeeMatch =
+          Boolean(capturePayeeMerchant) &&
+          capturePayeeMerchant === captureCtx.authoritativeExpectedMerchantId;
+        const isRefMatch = !pu?.reference_id || pu.reference_id === intent.milestone_id;
+        const isCustomMatch = !pu?.custom_id || pu.custom_id === intent.id;
+        const isCurrencyMatch =
+          !capture.amount?.currency_code ||
+          capture.amount.currency_code === intent.expected_currency;
+        const normExpected = Number(intent.expected_amount_canonical).toFixed(2);
+        const normCaptured =
+          capture.amount?.value !== undefined
+            ? Number(capture.amount.value).toFixed(2)
+            : normExpected;
+        const isAmountMatch = normCaptured === normExpected;
+
+        if (!isPayeeMatch || !isRefMatch || !isCustomMatch || !isCurrencyMatch || !isAmountMatch) {
+          if (intent.status === "CAPTURING") {
+            await serviceClient.rpc("admin_mark_intent_reconciliation_required", {
+              p_payment_intent_id: intent.id,
+              p_reason_code: "RECOVERED_CAPTURE_VALIDATION_FAILED",
+            });
+          }
+          return {
+            success: false,
+            intentId: intent.id,
+            previousStatus: intent.status,
+            resultingStatus: "RECONCILIATION_REQUIRED",
+            providerOrderId: intent.provider_order_id,
+            recovered: false,
+            milestoneBlocked: true,
+            reason: "RECOVERED_CAPTURE_VALIDATION_FAILED",
+          };
+        }
+
         const { data: completeSuccess, error: completeError } = await serviceClient.rpc(
           "reconcile_and_complete_payment_intent",
           {
@@ -257,6 +347,8 @@ export async function reconcilePaymentIntentServerSide(params: {
             p_raw_capture_response: capture,
             p_raw_order_response: orderDetails,
             p_resolution_notes: `Recovered and completed via PayPal order status COMPLETED with capture ${capture.id.trim()}`,
+            p_amount_cents: parsedAmountCents,
+            p_payee_merchant_id: captureCtx.authoritativeExpectedMerchantId,
           }
         );
 
@@ -376,17 +468,13 @@ export async function reconcilePaymentIntentServerSide(params: {
 
   let replayResponse: PayPalOrderResponse;
   try {
-    const res = await paypalClient.post<PayPalOrderResponse>(
-      "/v2/checkout/orders",
+    const res = await executePayPalCreateOrderReplay(
+      paypalClient,
       replayPayload,
-      {
-        paypalRequestId: intent.order_idempotency_key,
-        headers: {
-          Prefer: "return=representation",
-        },
-      }
+      intent.order_idempotency_key,
+      captureCtx
     );
-    replayResponse = res.data;
+    replayResponse = res.data as PayPalOrderResponse;
   } catch {
     // Replay failed: network error, timeout, or 5xx. DO NOT assume no order exists!
     return {
@@ -419,11 +507,9 @@ export async function reconcilePaymentIntentServerSide(params: {
   // If replay response returned minimal representation, fetch full representation
   if (!replayResponse.purchase_units || replayResponse.purchase_units.length === 0 || !replayResponse.purchase_units[0]?.payee?.merchant_id) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderResponse>(
-        `/v2/checkout/orders/${encodeURIComponent(recoveredOrderId)}`
-      );
+      const getRes = await executePayPalOrderGet(paypalClient, recoveredOrderId, captureCtx);
       if (getRes && getRes.data) {
-        replayResponse = getRes.data;
+        replayResponse = getRes.data as PayPalOrderResponse;
       }
     } catch {
       return {
@@ -447,7 +533,7 @@ export async function reconcilePaymentIntentServerSide(params: {
     pu?.custom_id === intent.id &&
     pu?.amount?.currency_code === "USD" &&
     pu?.amount?.value === intent.expected_amount_canonical &&
-    pu?.payee?.merchant_id?.trim() === intent.expected_merchant_id;
+    pu?.payee?.merchant_id?.trim() === captureCtx.authoritativeExpectedMerchantId;
 
   if (!isMatch) {
     // Payload mismatch on recovered order: Retain RECONCILIATION_REQUIRED

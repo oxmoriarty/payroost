@@ -144,6 +144,7 @@ describe("PayRoost Phase 3B.4.2.2: Critical Ledger and Milestone Integrity Remed
       clientId: "test-client-id",
       clientSecret: "test-client-secret",
       expectedMerchantId: validMerchantId,
+      paymentMode: "MERCHANT",
     };
 
     let mockRpc: ReturnType<typeof vi.fn>;

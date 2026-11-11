@@ -97,7 +97,7 @@ export interface PayPalApiResponse<T = unknown> {
 
 export interface CreatePlatformOrderParams {
   sellerMerchantId: string;
-  sellerPayerId?: string;
+  sellerPayerId: string;
   milestoneId: string;
   paymentIntentId: string;
   amountCanonical: string;

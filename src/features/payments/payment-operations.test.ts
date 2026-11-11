@@ -76,6 +76,8 @@ vi.mock("@/lib/paypal/env", () => ({
   getPayPalServerEnv: vi.fn(() => ({
     clientId: "sandbox-client-id",
     clientSecret: "sandbox-client-secret",
+    expectedMerchantId: "SANDBOX-MERCHANT-01",
+    paymentMode: "MERCHANT",
     mode: "sandbox",
   })),
 }));

@@ -250,6 +250,7 @@ describe("PayRoost Phase 3B.4.2.4: Financial Recovery Guard & Overload Remediati
       clientId: "CLIENT_123",
       clientSecret: "SECRET_123",
       expectedMerchantId: validExpectedMerchantId,
+      paymentMode: "MERCHANT",
     };
 
     const validCanonicalPayload = {

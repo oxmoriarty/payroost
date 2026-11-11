@@ -279,9 +279,21 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
 
           return (
             <div className="flex flex-col gap-0.5 py-1">
-              <Badge tone={tone} className={extra}>
-                {label}
-              </Badge>
+              <div className="flex items-center gap-1">
+                <Badge tone={tone} className={extra}>
+                  {label}
+                </Badge>
+                {data?.paymentMode === "PLATFORM" && (
+                  <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800">
+                    Platform
+                  </span>
+                )}
+                {data?.paymentMode === "MERCHANT" && (
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                    Merchant (Legacy)
+                  </span>
+                )}
+              </div>
               {data?.hasExpiredLease && (
                 <span className="text-[10px] font-semibold text-rose-600">Lease Expired</span>
               )}

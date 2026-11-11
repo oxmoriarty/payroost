@@ -220,6 +220,7 @@ describe("PayRoost Phase 3B.4.3.1: Completed-Order Recovery & Evidence Hardening
         clientSecret: "CLIENT_SECRET_TEST",
         expectedMerchantId: validExpectedMerchantId,
         timeoutMs: 15_000,
+        paymentMode: "MERCHANT",
       });
 
       mockPortalTokenResult = {

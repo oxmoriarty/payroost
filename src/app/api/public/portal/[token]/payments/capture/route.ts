@@ -12,6 +12,13 @@ import {
 import { getPayPalServerEnv } from "@/lib/paypal/env";
 import { PayPalClient } from "@/lib/paypal/client";
 import { PayPalError } from "@/lib/paypal/types";
+import { validatePayPalServerModeConfig } from "@/lib/paypal/payment-mode";
+import {
+  resolveCapturePaymentContext,
+  executePayPalOrderGet,
+  executePayPalOrderPostCapture,
+  verifyPreCaptureOrderAndRecoverIfCompleted,
+} from "@/features/payments/capture-helpers";
 import { apiError } from "@/lib/http";
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{20,128}$/;
@@ -368,11 +375,8 @@ export async function POST(
     });
   }
 
-  if (
-    !paypalEnv.expectedMerchantId ||
-    paypalEnv.expectedMerchantId.length < 3 ||
-    paypalEnv.expectedMerchantId.length > 64
-  ) {
+  const serverModeValidation = validatePayPalServerModeConfig(paypalEnv);
+  if (!serverModeValidation.valid) {
     return apiError("CONFIGURATION_ERROR", 500, {
       "Cache-Control": "no-store",
     });
@@ -382,7 +386,7 @@ export async function POST(
   const { data: intent, error: intentError } = await serviceClient
     .from("payment_intents")
     .select(
-      "id, project_id, milestone_id, agreement_version_id, status, expected_merchant_id, expected_currency, expected_amount_canonical, expected_amount_cents, capture_idempotency_key, provider_order_id, capture_lease_expires_at, created_at"
+      "id, project_id, milestone_id, agreement_version_id, status, expected_merchant_id, expected_currency, expected_amount_canonical, expected_amount_cents, capture_idempotency_key, canonical_payload_json, provider_order_id, capture_lease_expires_at, created_at"
     )
     .eq("provider_order_id", cleanOrderId)
     .maybeSingle();
@@ -532,269 +536,45 @@ export async function POST(
     });
   }
 
-  // 14. Server-Side Approval Verification: Retrieve order directly from PayPal (GET)
-  const paypalClient = new PayPalClient(paypalEnv);
-  let orderDetails: PayPalOrderDetails;
-  try {
-    const getRes = await paypalClient.get<PayPalOrderDetails>(
-      `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`
-    );
-    if (!getRes || !getRes.data) {
-      throw new Error("Empty GET order response");
-    }
-    orderDetails = getRes.data;
-  } catch (err: unknown) {
-    if (err instanceof PayPalError && err.status === 404) {
-      return apiError("ORDER_NOT_FOUND", 404, { "Cache-Control": "no-store" });
-    }
-    return apiError("PROVIDER_ERROR", 502, { "Cache-Control": "no-store" });
-  }
-
-  // Check top-level PayPal order ID
-  if (!orderDetails.id || orderDetails.id.trim() !== cleanOrderId) {
-    return apiError("ORDER_ID_MISMATCH", 400, { "Cache-Control": "no-store" });
-  }
-
-  // Strict Purchase Unit & Metadata Cross-Verification
-  if (!orderDetails.purchase_units || !Array.isArray(orderDetails.purchase_units) || orderDetails.purchase_units.length !== 1) {
-    return apiError("INVALID_PURCHASE_UNITS", 400, { "Cache-Control": "no-store" });
-  }
-
-  const pu = orderDetails.purchase_units[0];
-
-  // Verify milestone reference_id
-  if (!pu.reference_id || pu.reference_id !== intent.milestone_id) {
-    return apiError("ORDER_BINDING_MISMATCH", 400, { "Cache-Control": "no-store" });
-  }
-
-  // Verify payment intent custom_id
-  if (!pu.custom_id || pu.custom_id !== intent.id) {
-    return apiError("ORDER_BINDING_MISMATCH", 400, { "Cache-Control": "no-store" });
-  }
-
-  // Verify currency code
-  if (!pu.amount?.currency_code || pu.amount.currency_code !== intent.expected_currency) {
-    return apiError("CURRENCY_MISMATCH", 400, { "Cache-Control": "no-store" });
-  }
-
-  // Verify amount value using strict normalized string comparison
-  const normExpectedAmount = normalizeDecimal(intent.expected_amount_canonical);
-  const normPuAmount = normalizeDecimal(pu.amount?.value);
-  if (!normPuAmount || normPuAmount !== normExpectedAmount) {
-    return apiError("AMOUNT_MISMATCH", 400, { "Cache-Control": "no-store" });
-  }
-
-  // Verify payee merchant ID
-  if (!pu.payee?.merchant_id || pu.payee.merchant_id.trim() !== paypalEnv.expectedMerchantId) {
-    return apiError("MERCHANT_MISMATCH", 502, { "Cache-Control": "no-store" });
-  }
-
-  // Handle Already-Completed Order on PayPal (Safe Fenced Recovery Path)
-  if (orderDetails.status === "COMPLETED") {
-    const captures = pu.payments?.captures;
-    if (!captures || !Array.isArray(captures) || captures.length !== 1) {
-      return apiError("INVALID_PURCHASE_UNITS", 400, { "Cache-Control": "no-store" });
-    }
-
-    const capture = captures[0];
-    if (!capture.id || typeof capture.id !== "string" || capture.id.trim().length === 0) {
-      return apiError("ORDER_BINDING_MISMATCH", 400, { "Cache-Control": "no-store" });
-    }
-
-    // Verify capture currency if present
-    if (capture.amount?.currency_code && capture.amount.currency_code !== intent.expected_currency) {
-      return apiError("CURRENCY_MISMATCH", 400, { "Cache-Control": "no-store" });
-    }
-
-    // Verify capture amount if present
-    if (capture.amount?.value) {
-      const normCaptureAmount = normalizeDecimal(capture.amount.value);
-      if (!normCaptureAmount || normCaptureAmount !== normExpectedAmount) {
-        return apiError("AMOUNT_MISMATCH", 400, { "Cache-Control": "no-store" });
-      }
-    }
-
-    // Verify capture custom_id if present
-    if (capture.custom_id && capture.custom_id !== intent.id) {
-      return apiError("ORDER_BINDING_MISMATCH", 400, { "Cache-Control": "no-store" });
-    }
-
-    const captureCleanStatus = capture.status?.toUpperCase();
-
-    // 15.1 Atomically Claim Capture Lease with Row Lock and Fencing Token
-    const { data: claimData, error: claimError } = await serviceClient.rpc(
-      "claim_order_capture_lease",
-      {
-        p_session_token_hash: authResult.sessionTokenHash,
-        p_payment_intent_id: intent.id,
-        p_provider_order_id: cleanOrderId,
-        p_lease_seconds: 45,
-      }
-    );
-
-    if (claimError) {
-      return apiError("DATABASE_UNAVAILABLE", 503, { "Cache-Control": "no-store" });
-    }
-
-    const claimResult = claimData as {
-      success?: boolean;
-      claimed?: boolean;
-      already_completed?: boolean;
-      provider_capture_id?: string;
-      lease_token?: string;
-      error?: string;
-      status?: string;
-    };
-
-    // Safe idempotency fast-path if completed concurrently
-    if (claimResult.already_completed) {
-      return NextResponse.json(
-        {
-          success: true,
-          paymentIntentId: intent.id,
-          orderId: cleanOrderId,
-          captureId: claimResult.provider_capture_id ?? capture.id.trim(),
-          status: "COMPLETED",
-        },
-        {
-          status: 200,
-          headers: { "Cache-Control": "no-store" },
-        }
-      );
-    }
-
-    if (claimResult.error === "LEASE_ACTIVE") {
-      return NextResponse.json(
-        {
-          error: "CAPTURE_IN_PROGRESS",
-          message: "Payment capture is already in progress. Please retry in a few seconds.",
-        },
-        {
-          status: 409,
-          headers: {
-            "Cache-Control": "no-store",
-            "Retry-After": "3",
-          },
-        }
-      );
-    }
-
-    if (claimResult.error === "RECONCILIATION_REQUIRED") {
-      return apiError("RECONCILIATION_REQUIRED", 409, { "Cache-Control": "no-store" });
-    }
-
-    if (claimResult.error === "MILESTONE_NOT_PAYABLE") {
-      return apiError("MILESTONE_NOT_PAYABLE", 400, { "Cache-Control": "no-store" });
-    }
-
-    if (!claimResult.success || !claimResult.claimed || !claimResult.lease_token) {
-      if (claimResult.error === "FORBIDDEN_PROJECT_MISMATCH") {
-        return apiError("FORBIDDEN", 403, { "Cache-Control": "no-store" });
-      }
-      if (claimResult.error === "SESSION_EXPIRED") {
-        return apiError("SESSION_EXPIRED", 401, { "Cache-Control": "no-store" });
-      }
-      return apiError("CAPTURE_CLAIM_FAILED", 409, { "Cache-Control": "no-store" });
-    }
-
-    const recoveryLeaseToken = claimResult.lease_token;
-
-    // 15.2 If capture is COMPLETED, invoke reconcile_and_complete_payment_intent with lease fencing
-    if (captureCleanStatus === "COMPLETED") {
-      const { data: completeSuccess, error: completeError } = await serviceClient.rpc(
-        "reconcile_and_complete_payment_intent",
-        {
-          p_intent_id: intent.id,
-          p_provider_capture_id: capture.id.trim(),
-          p_raw_capture_response: capture,
-          p_raw_order_response: orderDetails,
-          p_resolution_notes: "Authoritative capture recovered from PayPal order status COMPLETED",
-          p_amount_cents: intent.expected_amount_cents,
-          p_payee_merchant_id: paypalEnv.expectedMerchantId,
-          p_lease_token: recoveryLeaseToken,
-        }
-      );
-
-      if (!completeError && completeSuccess) {
-        return NextResponse.json(
-          {
-            success: true,
-            paymentIntentId: intent.id,
-            orderId: cleanOrderId,
-            captureId: capture.id.trim(),
-            status: "COMPLETED",
-          },
-          {
-            status: 200,
-            headers: { "Cache-Control": "no-store" },
-          }
-        );
-      }
-
-      // Reconciliation persistence failed. Escalate under lease fencing.
-      await serviceClient.rpc("mark_intent_capture_reconciliation_required", {
-        p_session_token_hash: authResult.sessionTokenHash,
-        p_payment_intent_id: intent.id,
-        p_lease_token: recoveryLeaseToken,
-        p_reason_code: "PAYPAL_CAPTURE_PERSISTENCE_FAILED",
-      });
-      return apiError("RECONCILIATION_REQUIRED", 409, { "Cache-Control": "no-store" });
-    }
-
-    // 15.3 If capture is PENDING
-    if (captureCleanStatus === "PENDING") {
-      await serviceClient.rpc("mark_intent_capture_reconciliation_required", {
-        p_session_token_hash: authResult.sessionTokenHash,
-        p_payment_intent_id: intent.id,
-        p_lease_token: recoveryLeaseToken,
-        p_reason_code: "PAYPAL_CAPTURE_PENDING",
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          paymentIntentId: intent.id,
-          orderId: cleanOrderId,
-          captureId: capture.id.trim(),
-          status: "PENDING",
-          message: "Payment capture is pending provider settlement",
-        },
-        {
-          status: 202,
-          headers: { "Cache-Control": "no-store" },
-        }
-      );
-    }
-
-    // 15.4 If capture is FAILED or DECLINED
-    await serviceClient.rpc("mark_intent_capture_reconciliation_required", {
-      p_session_token_hash: authResult.sessionTokenHash,
-      p_payment_intent_id: intent.id,
-      p_lease_token: recoveryLeaseToken,
-      p_reason_code: `PAYPAL_CAPTURE_${captureCleanStatus || "FAILED"}`,
-    });
-
+  // 13.5 Resolve Mode-Aware Capture Context & Seller Verification (Fail-Closed)
+  const captureCtxResult = await resolveCapturePaymentContext({
+    intent,
+    paypalEnv,
+    serviceClient,
+    requireLiveSellerReady: true,
+  });
+  if (!captureCtxResult.ok) {
     return NextResponse.json(
       {
-        error: "PAYMENT_DECLINED",
-        message: "Payment was declined by PayPal.",
-        paymentIntentId: intent.id,
-        orderId: cleanOrderId,
-        captureId: capture.id.trim(),
-        status: "FAILED",
+        error: captureCtxResult.error,
+        message: captureCtxResult.message,
       },
       {
-        status: 400,
+        status: captureCtxResult.httpStatus,
         headers: { "Cache-Control": "no-store" },
       }
     );
   }
+  const captureCtx = captureCtxResult.context;
 
-  // Order status must be strictly APPROVED for capture execution
-  if (orderDetails.status !== "APPROVED") {
-    return apiError("ORDER_NOT_APPROVED", 400, {
-      "Cache-Control": "no-store",
-    });
+  // 14. Server-Side Approval Verification & Fenced Completed-Order Recovery
+  const paypalClient = new PayPalClient(paypalEnv);
+  const preCaptureCheck = await verifyPreCaptureOrderAndRecoverIfCompleted({
+    paypalClient,
+    serviceClient,
+    cleanOrderId,
+    sessionTokenHash: authResult.sessionTokenHash,
+    intent: {
+      id: intent.id,
+      milestone_id: intent.milestone_id,
+      expected_currency: intent.expected_currency,
+      expected_amount_canonical: intent.expected_amount_canonical,
+      expected_amount_cents: intent.expected_amount_cents,
+    },
+    captureCtx,
+  });
+  if (!preCaptureCheck.proceedToCapture) {
+    return preCaptureCheck.response;
   }
 
   // 15. Atomically Claim Capture Lease with Row Lock and Fencing Token
@@ -884,17 +664,14 @@ export async function POST(
     CAPTURE_RECONCILIATION_REASONS.PAYPAL_CAPTURE_TIMEOUT;
 
   try {
-    const res = await paypalClient.post<PayPalOrderDetails>(
-      `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}/capture`,
-      {},
-      {
-        paypalRequestId: intent.capture_idempotency_key,
-        headers: {
-          Prefer: "return=representation",
-        },
-      }
+    const res = await executePayPalOrderPostCapture(
+      paypalClient,
+      cleanOrderId,
+      intent.capture_idempotency_key,
+      captureCtx,
+      true
     );
-    captureResponse = res.data;
+    captureResponse = res.data as PayPalOrderDetails;
   } catch (err: unknown) {
     if (err instanceof PayPalError) {
       if (
@@ -944,11 +721,9 @@ export async function POST(
   // 17. Ambiguous Outcome Recovery: Query GET /v2/checkout/orders/{id}
   if (ambiguousOutcome || !captureResponse) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderDetails>(
-        `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`
-      );
+      const getRes = await executePayPalOrderGet(paypalClient, cleanOrderId, captureCtx);
 
-      const recoveredDetails = getRes.data;
+      const recoveredDetails = getRes.data as PayPalOrderDetails;
       const captures = recoveredDetails?.purchase_units?.[0]?.payments?.captures;
 
       if (recoveredDetails && captures && captures.length > 0) {
@@ -1004,13 +779,11 @@ export async function POST(
 
   if (isMinimal) {
     try {
-      const getRes = await paypalClient.get<PayPalOrderDetails>(
-        `/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`
-      );
+      const getRes = await executePayPalOrderGet(paypalClient, cleanOrderId, captureCtx);
       if (!getRes || !getRes.data) {
         throw new Error("Empty GET order response");
       }
-      captureResponse = getRes.data;
+      captureResponse = getRes.data as PayPalOrderDetails;
     } catch {
       await serviceClient.rpc("mark_intent_capture_reconciliation_required", {
         p_session_token_hash: authResult.sessionTokenHash,
@@ -1028,7 +801,7 @@ export async function POST(
   const validation = validateCapturePayload(captureResponse, {
     intentId: intent.id,
     milestoneId: intent.milestone_id,
-    expectedMerchantId: paypalEnv.expectedMerchantId,
+    expectedMerchantId: captureCtx.authoritativeExpectedMerchantId,
     expectedAmountCanonical: intent.expected_amount_canonical,
     orderId: cleanOrderId,
   });
@@ -1064,7 +837,7 @@ export async function POST(
       p_provider_capture_id: capture.id.trim(),
       p_capture_status: capture.status.toUpperCase(),
       p_amount_cents: intent.expected_amount_cents,
-      p_payee_merchant_id: paypalEnv.expectedMerchantId,
+      p_payee_merchant_id: captureCtx.authoritativeExpectedMerchantId,
       p_raw_capture_response: captureResponse,
     }
   );

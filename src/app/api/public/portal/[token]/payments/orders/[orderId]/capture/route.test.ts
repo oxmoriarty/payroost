@@ -68,6 +68,24 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
   let mockMilestoneResult: { data: unknown; error: unknown };
   let mockExistingCaptureResult: { data: unknown; error: unknown };
 
+  const validApprovedPayPalOrder = {
+    id: validOrderId,
+    status: "APPROVED",
+    purchase_units: [
+      {
+        reference_id: validMilestoneId,
+        custom_id: validIntentId,
+        amount: {
+          currency_code: "USD",
+          value: "1500.00",
+        },
+        payee: {
+          merchant_id: validExpectedMerchantId,
+        },
+      },
+    ],
+  };
+
   const validPayPalCaptureResponse = {
     id: validOrderId,
     status: "COMPLETED",
@@ -167,6 +185,7 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
       clientId: "CLIENT_ID_123",
       clientSecret: "CLIENT_SECRET_123",
       expectedMerchantId: validExpectedMerchantId,
+      paymentMode: "MERCHANT",
     });
 
     // Default table results
@@ -328,7 +347,7 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
     });
 
     mockPayPalGet.mockResolvedValue({
-      data: validPayPalCaptureResponse,
+      data: validApprovedPayPalOrder,
       status: 200,
       headers: new Headers({ "Content-Type": "application/json" }),
     });
@@ -625,11 +644,17 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         headers: new Headers(),
       });
 
-      mockPayPalGet.mockResolvedValueOnce({
-        data: validPayPalCaptureResponse, // full details on GET
-        status: 200,
-        headers: new Headers(),
-      });
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          data: validPayPalCaptureResponse, // full details on post-capture GET
+          status: 200,
+          headers: new Headers(),
+        });
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);
@@ -652,12 +677,18 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         })
       );
 
-      // Subsequent GET confirms order has completed capture
-      mockPayPalGet.mockResolvedValueOnce({
-        data: validPayPalCaptureResponse,
-        status: 200,
-        headers: new Headers(),
-      });
+      // Pre-capture GET confirms APPROVED, subsequent GET confirms completed capture
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          data: validPayPalCaptureResponse,
+          status: 200,
+          headers: new Headers(),
+        });
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);
@@ -680,16 +711,22 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         })
       );
 
-      // GET reveals order is still in APPROVED status without captures
-      mockPayPalGet.mockResolvedValueOnce({
-        data: {
-          id: validOrderId,
-          status: "APPROVED",
-          purchase_units: [{ reference_id: validMilestoneId }],
-        },
-        status: 200,
-        headers: new Headers(),
-      });
+      // Pre-capture GET confirms APPROVED, post-timeout GET reveals order is still APPROVED without captures
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          data: {
+            id: validOrderId,
+            status: "APPROVED",
+            purchase_units: [{ reference_id: validMilestoneId }],
+          },
+          status: 200,
+          headers: new Headers(),
+        });
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);
@@ -717,8 +754,14 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         })
       );
 
-      // GET also fails
-      mockPayPalGet.mockRejectedValueOnce(new Error("Network connection reset"));
+      // Pre-capture GET succeeds, post-timeout GET fails
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockRejectedValueOnce(new Error("Network connection reset"));
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);
@@ -746,7 +789,13 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         })
       );
 
-      mockPayPalGet.mockRejectedValueOnce(new Error("Network error"));
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockRejectedValueOnce(new Error("Network error"));
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);
@@ -771,11 +820,17 @@ describe("POST /api/public/portal/[token]/payments/orders/[orderId]/capture", ()
         })
       );
 
-      mockPayPalGet.mockResolvedValueOnce({
-        data: validPayPalCaptureResponse,
-        status: 200,
-        headers: new Headers(),
-      });
+      mockPayPalGet
+        .mockResolvedValueOnce({
+          data: validApprovedPayPalOrder,
+          status: 200,
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          data: validPayPalCaptureResponse,
+          status: 200,
+          headers: new Headers(),
+        });
 
       const { request, context } = createRequest({});
       const res = await POST(request, context);

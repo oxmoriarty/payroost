@@ -192,6 +192,7 @@ describe("POST /api/public/portal/[token]/payments/capture", () => {
       clientSecret: "CLIENT_SECRET_TEST",
       expectedMerchantId: validExpectedMerchantId,
       timeoutMs: 15_000,
+      paymentMode: "MERCHANT",
     });
 
     mockPortalTokenResult = {

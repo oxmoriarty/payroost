@@ -259,18 +259,18 @@ describe("Phase 3B.6: End-to-End Payment Integration & Consistency Suite", () =>
     expect(ledgerTransaction.currency).toBe("USD");
   });
 
-  // Boundary 9: Ledger entry → milestone paid state
-  it("Boundary 9: updates milestone status to ACCEPTED atomically with intent completion", () => {
-    // Simulated state transition executed by record_paypal_order_captured RPC
+  // Boundary 9: Ledger entry → payment completion without overwriting milestone work state
+  it("Boundary 9: completes payment intent atomically without mutating milestone work status", () => {
+    // Simulated state transition executed by Phase 3B.R3 record_paypal_order_captured RPC
     const milestoneStateBefore = { id: "m1", status: "APPROVED" };
     const intentStateBefore = { id: "i1", status: "CAPTURING" };
 
-    // Transaction executes:
+    // Transaction completes financial records without coercing milestone delivery state:
     const intentStateAfter = { ...intentStateBefore, status: "COMPLETED", completed_at: new Date().toISOString() };
-    const milestoneStateAfter = { ...milestoneStateBefore, status: "ACCEPTED" };
+    const milestoneStateAfter = { ...milestoneStateBefore };
 
     expect(intentStateAfter.status).toBe("COMPLETED");
-    expect(milestoneStateAfter.status).toBe("ACCEPTED");
+    expect(milestoneStateAfter.status).toBe("APPROVED");
   });
 
   // Boundary 10: Milestone paid state → refreshed client portal
@@ -278,7 +278,7 @@ describe("Phase 3B.6: End-to-End Payment Integration & Consistency Suite", () =>
     const milestone = {
       id: "m1",
       title: "Deliverable 1",
-      status: "ACCEPTED",
+      status: "APPROVED",
       amount_minor: 50000,
       currency: "USD",
     };

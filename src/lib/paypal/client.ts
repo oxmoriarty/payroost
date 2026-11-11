@@ -289,16 +289,31 @@ export class PayPalClient {
    * 6. Approval link extraction: Extracts the buyer approval URL from HATEOAS links.
    */
   public async createPlatformOrder(params: CreatePlatformOrderParams): Promise<PlatformOrderResult> {
+    if (this.config.paymentMode !== "PLATFORM") {
+      throw new PayPalError({
+        message: "Refusing to create Platform multi-party order when paymentMode is not PLATFORM",
+        status: 500,
+        errorName: "INVALID_PAYMENT_MODE",
+      });
+    }
+
     const currency = params.currency || "USD";
     const { sellerId: validatedSellerMerchantId } = this.validateSellerIdentifier(
       params.sellerMerchantId,
       "INVALID_SELLER_MERCHANT_ID",
       "seller merchant_id"
     );
-    const rawSellerPayerId =
-      params.sellerPayerId !== undefined ? params.sellerPayerId : validatedSellerMerchantId;
+
+    if (params.sellerPayerId === undefined || params.sellerPayerId === null) {
+      throw new PayPalError({
+        message: "Missing required seller payer_id for Platform Auth Assertion",
+        status: 400,
+        errorName: "INVALID_SELLER_PAYER_ID",
+      });
+    }
+
     const { sellerId: sellerPayerId } = this.validateSellerIdentifier(
-      rawSellerPayerId,
+      params.sellerPayerId,
       "INVALID_SELLER_PAYER_ID",
       "seller payer_id"
     );

@@ -252,6 +252,7 @@ describe("PayRoost Phase 3B.4.2.3: PostgREST Authorization & Capture Recovery Re
       clientId: "CLIENT_123",
       clientSecret: "SECRET_123",
       expectedMerchantId: validExpectedMerchantId,
+      paymentMode: "MERCHANT",
     };
 
     const validCanonicalPayload = {
