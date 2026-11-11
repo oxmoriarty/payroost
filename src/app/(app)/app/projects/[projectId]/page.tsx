@@ -6,6 +6,7 @@ import { AgreementEditor } from "@/features/agreements/agreement-editor";
 import { agreementDraftSchema } from "@/features/agreements/schema";
 import { MilestonePlanner } from "@/features/milestones/milestone-planner";
 import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
+import { ProjectAssistantPanel } from "@/features/assistant/project-assistant-panel";
 import { ResendVerificationButton } from "@/features/projects/resend-verification-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -139,6 +140,14 @@ export default async function ProjectWorkspacePage({
         agreementStatus={scopeBaselineVersion?.status ?? agreement?.status ?? null}
         canUseAi={canUseAi}
         initialChangeRequests={changeRequests}
+      />
+
+      {/* Context-Aware Read-Only Project Assistant (AI-6) */}
+      <ProjectAssistantPanel
+        mode="freelancer"
+        projectId={project.id}
+        projectTitle={project.title}
+        canUseAi={canUseAi}
       />
 
       {/* Project Activity Audit Trail */}

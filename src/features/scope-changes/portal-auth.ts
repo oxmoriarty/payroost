@@ -32,7 +32,7 @@ export type AuthenticatedPortalRequest =
 export async function authenticatePortalRequest(params: {
   request: Request;
   rawToken: string;
-  rateLimitPrefix: "portal-scope-analyze" | "portal-change-request";
+  rateLimitPrefix: "portal-scope-analyze" | "portal-change-request" | "portal-assistant";
   limit: number;
   windowMs: number;
 }): Promise<AuthenticatedPortalRequest> {

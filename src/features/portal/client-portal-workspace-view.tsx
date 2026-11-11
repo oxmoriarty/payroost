@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/utils";
+import { ProjectAssistantPanel } from "@/features/assistant/project-assistant-panel";
 import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { MilestoneCheckout } from "./milestone-checkout";
 import type {
@@ -304,6 +305,17 @@ export function ClientPortalWorkspaceView({
           agreementStatus={projectData.scopeBaselineStatus ?? projectData.agreementStatus}
           canUseAi={Boolean(projectData.canUseAi)}
           initialChangeRequests={projectData.changeRequests ?? []}
+        />
+      </div>
+
+      {/* Context-Aware Read-Only Project Assistant (AI-6) */}
+      <div className="mt-8">
+        <ProjectAssistantPanel
+          mode="client"
+          portalToken={token}
+          csrfToken={csrfToken}
+          projectTitle={projectData.title}
+          canUseAi={Boolean(projectData.canUseAi)}
         />
       </div>
     </div>
