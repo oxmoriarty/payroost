@@ -1,4 +1,11 @@
-import { CreditCard, FolderKanban, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import {
+  Bell,
+  CreditCard,
+  FolderKanban,
+  LayoutDashboard,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
 export type AppNavLink = {
   label: string;
@@ -10,6 +17,7 @@ export type AppNavLink = {
 export const APP_NAV_LINKS: AppNavLink[] = [
   { label: "Overview", href: "/app", icon: LayoutDashboard, exact: true },
   { label: "Projects", href: "/app/projects", icon: FolderKanban },
+  { label: "Notifications", href: "/app/notifications", icon: Bell },
   { label: "Payment operations", href: "/app/payments", icon: CreditCard },
   { label: "Settings", href: "/app/settings", icon: Settings },
 ];

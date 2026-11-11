@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { updateChangeRequestStatusSchema } from "@/features/scope-changes/schema";
+import { syncNotificationsFromActivityEvents } from "@/features/notifications/service";
 import { apiError } from "@/lib/http";
 import { allowRequest } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -70,7 +71,7 @@ export async function PATCH(
 
     const { data: existing, error: fetchError } = await supabase
       .from("change_requests")
-      .select("id, project_id, status")
+      .select("id, project_id, status, agreement_version_id, submitted_by_label")
       .eq("id", changeRequestId)
       .eq("project_id", projectId)
       .maybeSingle();
@@ -116,6 +117,15 @@ export async function PATCH(
         ? "change_request.resolved"
         : "change_request.withdrawn";
 
+    const existingMeta = existing as {
+      agreement_version_id?: string | null;
+      submitted_by_label?: string | null;
+    };
+    const updatedMeta = updated as {
+      agreement_version_id?: string | null;
+      submitted_by_label?: string | null;
+    };
+
     await supabase.from("activity_events").insert({
       project_id: projectId,
       actor_user_id: user.id,
@@ -129,8 +139,16 @@ export async function PATCH(
         changeRequestId,
         previousStatus: "OPEN",
         newStatus: parsed.data.status,
+        agreementVersionId: updatedMeta.agreement_version_id ?? existingMeta.agreement_version_id ?? null,
+        submittedByLabel: updatedMeta.submitted_by_label ?? existingMeta.submitted_by_label ?? null,
       },
     });
+
+    try {
+      await syncNotificationsFromActivityEvents({ projectId, limit: 10 });
+    } catch {
+      // Non-fatal
+    }
 
     return NextResponse.json(
       {

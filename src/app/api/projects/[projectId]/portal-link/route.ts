@@ -5,6 +5,7 @@ import { createPortalToken, hashPortalToken } from "@/lib/security/tokens";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { getCanonicalAppUrl } from "@/lib/security/app-url";
 import { sendPortalInvitationEmail } from "@/lib/email/provider";
+import { syncNotificationsFromActivityEvents } from "@/features/notifications/service";
 import { apiError } from "@/lib/http";
 
 export const PORTAL_TOKEN_EXPIRY_DAYS = 7;
@@ -131,6 +132,21 @@ export async function POST(
   if (!delivery.success) {
     // Sanitized error response; never disclose raw token or URL
     return apiError("EMAIL_DELIVERY_FAILED", 502);
+  }
+
+  // Record audit/history event without ever persisting raw tokens or invite URLs
+  try {
+    await supabase.from("activity_events").insert({
+      project_id: projectId,
+      actor_user_id: user.id,
+      actor_label: user.email ? `Freelancer (${user.email})` : "Freelancer",
+      event_type: "portal.invited",
+      summary: "Sent verified Client Portal invitation link",
+      metadata: { expiresAt },
+    });
+    await syncNotificationsFromActivityEvents({ projectId, limit: 10 });
+  } catch {
+    // Non-fatal if activity insert/sync unavailable in mocked environments
   }
 
   // 11. Success response: Raw token and portal URL are strictly omitted from response

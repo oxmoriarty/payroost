@@ -213,7 +213,12 @@ describe("Agreement Draft Application & Versioning Lifecycle (/api/projects/[pro
         project_id: projectId,
         event_type: "agreement.version_created",
         summary: "Created AI-assisted agreement version 2",
-        metadata: { source: "AI_ASSISTED" },
+        metadata: {
+          source: "AI_ASSISTED",
+          agreementVersionId: "ver-2",
+          versionNumber: 2,
+          isRevision: true,
+        },
       })
     );
   });

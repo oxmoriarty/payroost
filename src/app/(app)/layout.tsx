@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app/header";
 import { Sidebar } from "@/components/app/sidebar";
+import { listUserNotifications } from "@/features/notifications/service";
+import type { NotificationRecord } from "@/features/notifications/types";
 import { getWorkspaceChromeData } from "@/features/projects/data";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -11,6 +13,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     userEmail: null as string | null,
     notifications: [] as Awaited<ReturnType<typeof getWorkspaceChromeData>>["notifications"],
   };
+  let persistentNotifications: NotificationRecord[] | undefined;
+  let unreadCount = 0;
+  let actionRequiredCount = 0;
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
@@ -18,7 +23,21 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) redirect("/login");
-    chrome = await getWorkspaceChromeData(supabase, user);
+    const [workspaceChrome, notificationPage] = await Promise.all([
+      getWorkspaceChromeData(supabase, user),
+      listUserNotifications({
+        userId: user.id,
+        page: 1,
+        pageSize: 12,
+        supabaseClient: supabase,
+      }).catch(() => null),
+    ]);
+    chrome = workspaceChrome;
+    if (notificationPage) {
+      persistentNotifications = notificationPage.notifications;
+      unreadCount = notificationPage.unreadCount;
+      actionRequiredCount = notificationPage.actionRequiredCount;
+    }
   }
 
   return (
@@ -26,7 +45,10 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <Sidebar />
       <div className="min-w-0 flex-1">
         <AppHeader
+          actionRequiredCount={actionRequiredCount}
           notifications={chrome.notifications}
+          persistentNotifications={persistentNotifications}
+          unreadCount={unreadCount}
           userEmail={chrome.userEmail}
           userLabel={chrome.userLabel}
         />

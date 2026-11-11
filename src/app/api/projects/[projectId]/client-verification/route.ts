@@ -3,6 +3,7 @@ import { requireProjectOwner } from "@/features/projects/authorization";
 import { createVerificationToken, hashVerificationToken } from "@/lib/security/tokens";
 import { allowRequest } from "@/lib/security/rate-limit";
 import { sendClientVerificationEmail } from "@/lib/email/provider";
+import { syncNotificationsFromActivityEvents } from "@/features/notifications/service";
 import { apiError } from "@/lib/http";
 
 export async function POST(_request: Request, context: { params: Promise<{ projectId: string }> }) {
@@ -50,6 +51,19 @@ export async function POST(_request: Request, context: { params: Promise<{ proje
         deliveryWarning: delivery.error,
         clientEmail: project.client_email,
       }, { status: 502 });
+    }
+
+    try {
+      await supabase.from("activity_events").insert({
+        project_id: project.id,
+        actor_label: "Freelancer",
+        event_type: "client_email.verification_resent",
+        summary: `Resent verification link to ${project.client_email}`,
+        metadata: {},
+      });
+      await syncNotificationsFromActivityEvents({ projectId: project.id, limit: 10 });
+    } catch {
+      // Non-fatal
     }
 
     return NextResponse.json({

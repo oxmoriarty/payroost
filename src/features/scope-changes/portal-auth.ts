@@ -36,9 +36,12 @@ export async function authenticatePortalRequest(params: {
     | "portal-scope-analyze"
     | "portal-change-request"
     | "portal-assistant"
-    | "portal-milestone-review";
+    | "portal-milestone-review"
+    | "portal-notifications"
+    | "portal-history";
   limit: number;
   windowMs: number;
+  requireCsrf?: boolean;
 }): Promise<AuthenticatedPortalRequest> {
   const { request, rawToken, rateLimitPrefix, limit, windowMs } = params;
 
@@ -89,8 +92,9 @@ export async function authenticatePortalRequest(params: {
     }
   }
 
+  const requireCsrf = params.requireCsrf !== false;
   const csrfToken = request.headers.get("x-csrf-token");
-  if (!csrfToken) {
+  if (requireCsrf && !csrfToken) {
     return {
       ok: false,
       response: apiError("INVALID_CSRF_TOKEN", 403, NO_STORE),
@@ -141,7 +145,7 @@ export async function authenticatePortalRequest(params: {
 
   const sessionAuth = await authenticatePortalSession({
     csrfToken,
-    requireCsrf: true,
+    requireCsrf,
     expectedProjectId: tokenRow.project_id,
     supabaseClient: serviceClient,
   });

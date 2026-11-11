@@ -13,6 +13,11 @@ import { MilestoneWorkspacePanel } from "@/features/milestones/milestone-workspa
 import { syncApprovedAgreementMilestones } from "@/features/milestones/sync";
 import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { ProjectAssistantPanel } from "@/features/assistant/project-assistant-panel";
+import { mapActivityEventsToHistoryItems } from "@/features/history/mapper";
+import { ProjectHistoryPanel } from "@/features/history/project-history-panel";
+import { getProjectHistory } from "@/features/history/service";
+import type { ProjectHistoryPageResult } from "@/features/history/types";
+import { syncNotificationsFromActivityEvents } from "@/features/notifications/service";
 import { PortalInviteCard } from "@/features/projects/portal-invite-card";
 import { ResendVerificationButton } from "@/features/projects/resend-verification-button";
 import { Badge } from "@/components/ui/badge";
@@ -62,10 +67,31 @@ export default async function ProjectWorkspacePage({
   }
 
   const { project, agreement, versions, milestones, activities, changeRequests } = workspace;
-  const paymentStates = await getProjectMilestonePaymentStates(
-    project.id,
-    milestones.map((m) => m.id),
-  );
+  const supabaseForHistory = await createClient();
+  const [paymentStates, initialHistoryResult] = await Promise.all([
+    getProjectMilestonePaymentStates(
+      project.id,
+      milestones.map((m) => m.id),
+    ),
+    getProjectHistory({
+      projectId: project.id,
+      page: 1,
+      pageSize: 20,
+      supabaseClient: supabaseForHistory,
+    }).catch(() => null),
+    syncNotificationsFromActivityEvents({
+      projectId: project.id,
+      limit: 50,
+    }).catch(() => undefined),
+  ]);
+  const fallbackHistoryItems = mapActivityEventsToHistoryItems(activities, "freelancer");
+  const initialHistory: ProjectHistoryPageResult = initialHistoryResult ?? {
+    items: fallbackHistoryItems.slice(0, 20),
+    totalCount: fallbackHistoryItems.length,
+    page: 1,
+    pageSize: 20,
+    hasMore: fallbackHistoryItems.length > 20,
+  };
   const milestoneNotes = extractMilestoneNotes(activities);
 
   const isClientVerified = Boolean(project.client_email_verified_at);
@@ -218,13 +244,15 @@ export default async function ProjectWorkspacePage({
       />
 
       {/* Active Milestone Execution & Deliverable Submissions */}
-      <MilestoneWorkspacePanel
-        agreementApproved={Boolean(approvedVersion)}
-        initialNotes={milestoneNotes}
-        milestones={milestones}
-        paymentStates={paymentStates}
-        projectId={project.id}
-      />
+      <div id="milestones">
+        <MilestoneWorkspacePanel
+          agreementApproved={Boolean(approvedVersion)}
+          initialNotes={milestoneNotes}
+          milestones={milestones}
+          paymentStates={paymentStates}
+          projectId={project.id}
+        />
+      </div>
 
       {/* Standalone Milestone Planner (AI-4) */}
       <MilestonePlanner
@@ -278,24 +306,12 @@ export default async function ProjectWorkspacePage({
         canUseAi={canUseAi}
       />
 
-      {/* Project Activity Audit Trail */}
-      {activities.length > 0 && (
-        <Card className="p-6">
-          <h2 className="font-display text-xl text-ink-950">Activity history</h2>
-          <ol className="mt-4 space-y-4">
-            {activities.map((activity) => (
-              <li key={activity.id} className="border-l-2 border-teal-600/30 pl-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-800">{activity.event_type}</span>
-                  <span className="text-xs text-ink-500">· {new Date(activity.created_at).toLocaleString()}</span>
-                </div>
-                <p className="mt-1 text-sm text-ink-800">{activity.summary}</p>
-                <p className="text-xs text-ink-500">Actor: {activity.actor_label}</p>
-              </li>
-            ))}
-          </ol>
-        </Card>
-      )}
+      {/* Chronological Project History */}
+      <ProjectHistoryPanel
+        initialHistory={initialHistory}
+        mode="freelancer"
+        projectId={project.id}
+      />
     </div>
   );
 }

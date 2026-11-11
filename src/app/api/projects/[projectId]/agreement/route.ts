@@ -3,6 +3,7 @@ import { z } from "zod";
 import { agreementVersionUpdateSchema } from "@/features/agreements/schema";
 import { agreementContentHash, manualAgreementDraft } from "@/features/agreements/versioning";
 import { createClient } from "@/lib/supabase/server";
+import { syncNotificationsFromActivityEvents } from "@/features/notifications/service";
 import { allowRequest } from "@/lib/security/rate-limit";
 import { apiError } from "@/lib/http";
 
@@ -148,6 +149,7 @@ export async function saveAgreementDraft(
       return { error: apiError("SAVE_FAILED", 500) };
     }
 
+    const createdVersion = insert.data as { id: string; version_number: number };
     await supabase.from("activity_events").insert({
       project_id: project.id,
       actor_user_id: user.id,
@@ -157,8 +159,54 @@ export async function saveAgreementDraft(
         source === "AI_ASSISTED"
           ? `Created AI-assisted agreement version ${nextNumber}`
           : `Created agreement version ${nextNumber}`,
-      metadata: { source },
+      metadata: {
+        source,
+        agreementVersionId: createdVersion.id,
+        versionNumber: nextNumber,
+        isRevision: nextNumber > 1,
+      },
     });
+
+    if (nextNumber > 1) {
+      try {
+        const { data: priorOpenRequests } = await supabase
+          .from("change_requests")
+          .select("id, agreement_version_id")
+          .eq("project_id", project.id)
+          .eq("status", "OPEN")
+          .not("ai_analysis", "is", null)
+          .neq("agreement_version_id", createdVersion.id);
+
+        const openRequests = (priorOpenRequests ?? []) as Array<{
+          id: string;
+          agreement_version_id: string;
+        }>;
+        for (const reqRow of openRequests) {
+          await supabase.from("activity_events").insert({
+            project_id: project.id,
+            actor_user_id: user.id,
+            actor_label: "System",
+            event_type: "change_request.analysis_stale",
+            summary: `Earlier AI scope-change analysis predates agreement v${nextNumber} draft`,
+            metadata: {
+              changeRequestId: reqRow.id,
+              previousAgreementVersionId: reqRow.agreement_version_id,
+              agreementVersionId: createdVersion.id,
+              versionNumber: nextNumber,
+              stale: true,
+            },
+          });
+        }
+      } catch {
+        // Non-fatal if change_requests check unavailable
+      }
+    }
+
+    try {
+      await syncNotificationsFromActivityEvents({ projectId: project.id, limit: 15 });
+    } catch {
+      // Non-fatal catch-up sync
+    }
 
     return { data: insert.data };
   } catch {

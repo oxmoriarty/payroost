@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button";
 import { type AgreementContentLike } from "@/features/agreements/agreement-document-view";
 import { extractMilestoneNotes } from "@/features/milestones/activity-notes";
 import { syncApprovedAgreementMilestones } from "@/features/milestones/sync";
+import { getPortalProjectHistory } from "@/features/history/service";
+import type { ProjectHistoryPageResult } from "@/features/history/types";
+import { listPortalNotifications } from "@/features/notifications/service";
+import type { NotificationPageResult } from "@/features/notifications/types";
 import { ClientPortalEntryView } from "@/features/portal/client-portal-entry-view";
 import { ClientPortalWorkspaceView } from "@/features/portal/client-portal-workspace-view";
 import type {
@@ -239,8 +243,13 @@ export default async function ClientPortalPage({
     }
   }
 
-  // 8. Query milestones & sanitized activity history for boundProjectId
-  const [{ data: rawMilestones, error: milestonesError }, { data: rawActivities }] = await Promise.all([
+  // 8. Query milestones, sanitized activity history, and client portal notifications for boundProjectId
+  const [
+    { data: rawMilestones, error: milestonesError },
+    { data: rawActivities },
+    portalHistoryResult,
+    portalNotificationsResult,
+  ] = await Promise.all([
     serviceClient
       .from("milestones")
       .select(`
@@ -264,6 +273,19 @@ export default async function ClientPortalPage({
       .eq("project_id", boundProjectId)
       .order("created_at", { ascending: false })
       .limit(30),
+    getPortalProjectHistory({
+      projectId: boundProjectId,
+      page: 1,
+      pageSize: 20,
+      serviceClient,
+    }).catch(() => null),
+    listPortalNotifications({
+      projectId: boundProjectId,
+      clientEmail: authResult.clientEmail || project.client_email,
+      page: 1,
+      pageSize: 10,
+      serviceClient,
+    }).catch(() => null),
   ]);
 
   if (milestonesError) {
@@ -281,12 +303,23 @@ export default async function ClientPortalPage({
 
   const milestoneNotes = extractMilestoneNotes(typedActivities);
 
-  const portalActivities: PortalActivityItem[] = typedActivities.map((event) => ({
-    id: event.id,
-    actorLabel: event.actor_label,
-    eventType: event.event_type,
-    summary: event.summary,
-    createdAt: event.created_at,
+  const portalHistory: ProjectHistoryPageResult = portalHistoryResult ?? {
+    items: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 20,
+    hasMore: false,
+  };
+
+  const portalNotifications: NotificationPageResult | undefined =
+    portalNotificationsResult ?? undefined;
+
+  const portalActivities: PortalActivityItem[] = portalHistory.items.map((item) => ({
+    id: item.id,
+    actorLabel: item.actorLabel,
+    eventType: item.eventType,
+    summary: item.summary,
+    createdAt: item.createdAt,
   }));
 
   const milestoneList = (rawMilestones || []) as Array<{
@@ -493,6 +526,8 @@ export default async function ClientPortalPage({
     canUseAi: Boolean(process.env.GEMINI_API_KEY),
     changeRequests: portalChangeRequests,
     activities: portalActivities,
+    history: portalHistory,
+    notifications: portalNotifications,
     milestones: portalMilestones,
   };
 

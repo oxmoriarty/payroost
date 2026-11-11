@@ -1,4 +1,6 @@
 import type { AgreementContentLike } from "@/features/agreements/agreement-document-view";
+import type { ProjectHistoryPageResult } from "@/features/history/types";
+import type { NotificationPageResult } from "@/features/notifications/types";
 import type { ChangeRequest } from "@/features/projects/types";
 
 export interface PortalMilestone {
@@ -61,6 +63,8 @@ export interface PortalProjectData {
   canUseAi?: boolean;
   changeRequests?: ChangeRequest[];
   activities?: PortalActivityItem[];
+  history?: ProjectHistoryPageResult;
+  notifications?: NotificationPageResult;
   milestones: PortalMilestone[];
 }
 

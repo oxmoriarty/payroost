@@ -762,6 +762,12 @@ export function ScopeChangePanel({
             {changeRequests.map((cr) => {
               const parsedAnalysis = storedScopeChangeAnalysisSchema.safeParse(cr.ai_analysis);
               const isExpanded = expandedId === cr.id;
+              const isCrAnalysisStale =
+                cr.status === "OPEN" &&
+                parsedAnalysis.success &&
+                Boolean(agreementVersionId) &&
+                Boolean(cr.agreement_version_id) &&
+                cr.agreement_version_id !== agreementVersionId;
 
               return (
                 <li
@@ -788,7 +794,17 @@ export function ScopeChangePanel({
                         ) : (
                           <Badge tone="neutral">Text Only</Badge>
                         )}
+                        {isCrAnalysisStale && (
+                          <Badge tone="warning">Baseline Changed (Re-run Suggested)</Badge>
+                        )}
                       </div>
+                      {isCrAnalysisStale && (
+                        <p className="text-xs text-amber-800">
+                          This analysis was generated against an earlier agreement version
+                          {agreementVersionNumber ? ` before v${agreementVersionNumber}` : ""}.
+                          Re-run analysis for current baseline impact.
+                        </p>
+                      )}
 
                       <div className="pt-1">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">

@@ -9,7 +9,6 @@ import {
   LogOut,
   CreditCard,
   Calendar,
-  Clock3,
   ExternalLink,
   FileText,
   DollarSign,
@@ -22,8 +21,12 @@ import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/utils";
 import { AgreementDocumentView } from "@/features/agreements/agreement-document-view";
 import { ProjectAssistantPanel } from "@/features/assistant/project-assistant-panel";
+import { mapActivityEventsToHistoryItems } from "@/features/history/mapper";
+import { ProjectHistoryPanel } from "@/features/history/project-history-panel";
+import type { ProjectHistoryPageResult } from "@/features/history/types";
 import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { MilestoneCheckout } from "./milestone-checkout";
+import { PortalNotificationsPanel } from "./portal-notifications-panel";
 import type {
   PortalProjectData,
   PortalMilestone,
@@ -283,6 +286,20 @@ export function ClientPortalWorkspaceView({
         </Card>
       </div>
 
+      {/* Portal Notifications Feed */}
+      {projectData.notifications && (
+        <PortalNotificationsPanel
+          csrfToken={csrfToken}
+          initialData={projectData.notifications}
+          onNavigateSection={(sectionId) => {
+            if (sectionId === "agreement") {
+              setShowAgreementDetails(true);
+            }
+          }}
+          token={token}
+        />
+      )}
+
       {/* Project Brief / Context */}
       {projectData.brief && (
         <Card className="mt-6 p-5 sm:p-6 bg-slate-50/50">
@@ -306,7 +323,7 @@ export function ClientPortalWorkspaceView({
 
       {/* Agreement Terms & Version History */}
       {(displayedAgreementContent || versionHistory.length > 0) && (
-        <Card className="mt-6 p-5 sm:p-6">
+        <Card className="mt-6 p-5 sm:p-6" id="agreement">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-display text-xl font-bold text-ink-950">
@@ -359,7 +376,7 @@ export function ClientPortalWorkspaceView({
       )}
 
       {/* Milestones Section */}
-      <div className="mt-8">
+      <div className="mt-8" id="milestones">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-display text-xl font-bold text-ink-950">Project Milestones</h2>
@@ -667,7 +684,7 @@ export function ClientPortalWorkspaceView({
       </div>
 
       {/* Scope Changes & AI Impact Assessment (AI-5) */}
-      <div className="mt-8">
+      <div className="mt-8" id="scope-changes">
         <ScopeChangePanel
           mode="client"
           portalToken={token}
@@ -695,30 +712,44 @@ export function ClientPortalWorkspaceView({
         />
       </div>
 
-      {/* Sanitized Project Activity History */}
-      {projectData.activities && projectData.activities.length > 0 && (
-        <Card className="mt-8 p-6">
-          <div className="flex items-center gap-2">
-            <Clock3 className="h-5 w-5 text-teal-700" />
-            <h2 className="font-display text-xl font-bold text-ink-950">Project Activity History</h2>
-          </div>
-          <ol className="mt-4 space-y-3">
-            {projectData.activities.map((activity) => (
-              <li className="border-l-2 border-teal-600/30 pl-4" key={activity.id}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-800">
-                    {activity.eventType}
-                  </span>
-                  <span className="text-xs text-ink-500">
-                    · {new Date(activity.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-ink-800">{activity.summary}</p>
-                <p className="text-xs text-ink-500">Actor: {activity.actorLabel}</p>
-              </li>
-            ))}
-          </ol>
-        </Card>
+      {/* Chronological Privacy-Filtered Project History */}
+      {(projectData.history || (projectData.activities && projectData.activities.length > 0)) && (
+        <div className="mt-8">
+          <ProjectHistoryPanel
+            initialHistory={
+              projectData.history ??
+              ((): ProjectHistoryPageResult => {
+                const mapped = mapActivityEventsToHistoryItems(
+                  (projectData.activities ?? []).map((act) => ({
+                    id: act.id,
+                    project_id: projectData.id,
+                    actor_label: act.actorLabel,
+                    event_type: act.eventType,
+                    summary: act.summary,
+                    metadata: {},
+                    created_at: act.createdAt,
+                  })),
+                  "client",
+                );
+                return {
+                  items: mapped,
+                  totalCount: mapped.length,
+                  page: 1,
+                  pageSize: 20,
+                  hasMore: false,
+                };
+              })()
+            }
+            mode="client"
+            onClientNavigateSection={(sectionId) => {
+              if (sectionId === "agreement") {
+                setShowAgreementDetails(true);
+              }
+            }}
+            portalToken={token}
+            projectId={projectData.id}
+          />
+        </div>
       )}
     </div>
   );
