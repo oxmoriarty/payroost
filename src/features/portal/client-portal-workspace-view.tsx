@@ -16,22 +16,36 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/utils";
+import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { MilestoneCheckout } from "./milestone-checkout";
-import type { PortalProjectData, PortalMilestone } from "./types";
+import type {
+  PortalProjectData,
+  PortalMilestone,
+  PortalPaymentReturnContext,
+} from "./types";
 
 interface ClientPortalWorkspaceViewProps {
   token: string;
   projectData: PortalProjectData;
   csrfToken: string;
+  initialPaymentReturn?: PortalPaymentReturnContext;
 }
 
 export function ClientPortalWorkspaceView({
   token,
   projectData,
   csrfToken,
+  initialPaymentReturn,
 }: ClientPortalWorkspaceViewProps) {
   const router = useRouter();
-  const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const initialMatchedMilestone = initialPaymentReturn
+    ? projectData.milestones.find(
+        (m) => m.paymentIntentId === initialPaymentReturn.paymentIntentId
+      )
+    : undefined;
+  const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(
+    initialMatchedMilestone?.id ?? null
+  );
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const { milestones } = projectData;
@@ -255,6 +269,12 @@ export function ClientPortalWorkspaceView({
                         token={token}
                         milestone={milestone}
                         csrfToken={csrfToken}
+                        paymentReturn={
+                          initialPaymentReturn &&
+                          initialPaymentReturn.paymentIntentId === milestone.paymentIntentId
+                            ? initialPaymentReturn
+                            : undefined
+                        }
                         onCancel={() => setActiveMilestoneId(null)}
                         onPaymentSuccess={() => {
                           router.refresh();
@@ -267,6 +287,24 @@ export function ClientPortalWorkspaceView({
             })
           )}
         </div>
+      </div>
+
+      {/* Scope Changes & AI Impact Assessment (AI-5) */}
+      <div className="mt-8">
+        <ScopeChangePanel
+          mode="client"
+          portalToken={token}
+          csrfToken={csrfToken}
+          projectCurrency={projectData.currency}
+          confirmedBudgetMinor={projectData.totalAmountMinor}
+          agreementVersionId={projectData.agreementVersionId ?? null}
+          agreementVersionNumber={
+            projectData.scopeBaselineVersionNumber ?? projectData.agreementVersionNumber ?? null
+          }
+          agreementStatus={projectData.scopeBaselineStatus ?? projectData.agreementStatus}
+          canUseAi={Boolean(projectData.canUseAi)}
+          initialChangeRequests={projectData.changeRequests ?? []}
+        />
       </div>
     </div>
   );

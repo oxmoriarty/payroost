@@ -1,3 +1,5 @@
+import type { ChangeRequest } from "@/features/projects/types";
+
 export interface PortalMilestone {
   id: string;
   title: string;
@@ -25,7 +27,12 @@ export interface PortalProjectData {
   totalAmountMinor: number;
   projectStatus: string;
   agreementStatus: string;
+  agreementVersionId?: string | null;
   agreementVersionNumber?: number;
+  scopeBaselineVersionNumber?: number | null;
+  scopeBaselineStatus?: string | null;
+  canUseAi?: boolean;
+  changeRequests?: ChangeRequest[];
   milestones: PortalMilestone[];
 }
 
@@ -33,4 +40,10 @@ export interface PortalInvitationMetadata {
   valid: boolean;
   projectTitle: string;
   expiresAt: string;
+}
+
+export interface PortalPaymentReturnContext {
+  paymentIntentId: string;
+  paymentStatus: "approved" | "cancelled";
+  orderToken?: string | null;
 }

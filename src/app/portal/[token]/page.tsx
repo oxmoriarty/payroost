@@ -8,14 +8,49 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClientPortalEntryView } from "@/features/portal/client-portal-entry-view";
 import { ClientPortalWorkspaceView } from "@/features/portal/client-portal-workspace-view";
-import type { PortalMilestone, PortalProjectData } from "@/features/portal/types";
+import type {
+  PortalMilestone,
+  PortalPaymentReturnContext,
+  PortalProjectData,
+} from "@/features/portal/types";
+import type { ChangeRequest } from "@/features/projects/types";
+
+const RETURN_INTENT_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RETURN_ORDER_TOKEN_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 
 export default async function ClientPortalPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+
+  const rawPaymentIntentId =
+    typeof resolvedSearchParams.payment_intent_id === "string"
+      ? resolvedSearchParams.payment_intent_id.trim()
+      : "";
+  const rawPaymentStatus =
+    typeof resolvedSearchParams.payment_status === "string"
+      ? resolvedSearchParams.payment_status.trim().toLowerCase()
+      : "";
+  const rawOrderToken =
+    typeof resolvedSearchParams.token === "string"
+      ? resolvedSearchParams.token.trim()
+      : "";
+
+  const initialPaymentReturn: PortalPaymentReturnContext | undefined =
+    RETURN_INTENT_UUID_REGEX.test(rawPaymentIntentId) &&
+    (rawPaymentStatus === "approved" || rawPaymentStatus === "cancelled")
+      ? {
+          paymentIntentId: rawPaymentIntentId,
+          paymentStatus: rawPaymentStatus,
+          orderToken: RETURN_ORDER_TOKEN_REGEX.test(rawOrderToken) ? rawOrderToken : null,
+        }
+      : undefined;
 
   // 1. Basic token validation
   if (!token || token.length < 20 || token.length > 128) {
@@ -120,12 +155,16 @@ export default async function ClientPortalPage({
 
   let agreementStatus = agreement?.status || "DRAFT";
   let agreementVersionNumber = 1;
+  let agreementVersionId: string | null = agreement?.current_version_id ?? null;
+  let scopeBaselineVersionId: string | null = agreement?.current_version_id ?? null;
+  let scopeBaselineVersionNumber: number | null = null;
+  let scopeBaselineStatus: string | null = agreement?.status ?? null;
   let isAgreementApproved = false;
 
   if (agreement?.current_version_id) {
     const { data: version, error: versionError } = await serviceClient
       .from("agreement_versions")
-      .select("version_number, status")
+      .select("id, version_number, status")
       .eq("id", agreement.current_version_id)
       .maybeSingle();
 
@@ -134,11 +173,33 @@ export default async function ClientPortalPage({
     }
 
     if (version) {
+      agreementVersionId = version.id;
+      scopeBaselineVersionId = version.id;
+      scopeBaselineVersionNumber = version.version_number;
+      scopeBaselineStatus = version.status;
       agreementVersionNumber = version.version_number;
       isAgreementApproved = version.status === "APPROVED";
       if (isAgreementApproved) {
         agreementStatus = "APPROVED";
       }
+    }
+  }
+
+  // Prefer the newest APPROVED version for scope-change baseline if current_version_id points to a newer draft
+  if (agreement?.id && !isAgreementApproved) {
+    const { data: approvedBaseline } = await serviceClient
+      .from("agreement_versions")
+      .select("id, version_number, status")
+      .eq("agreement_id", agreement.id)
+      .eq("status", "APPROVED")
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (approvedBaseline?.id) {
+      scopeBaselineVersionId = approvedBaseline.id;
+      scopeBaselineVersionNumber = approvedBaseline.version_number;
+      scopeBaselineStatus = approvedBaseline.status;
     }
   }
 
@@ -315,6 +376,30 @@ export default async function ClientPortalPage({
     };
   });
 
+  const { data: rawChangeRequests } = await serviceClient
+    .from("change_requests")
+    .select("*")
+    .eq("project_id", boundProjectId)
+    .order("created_at", { ascending: false });
+
+  const portalChangeRequests: ChangeRequest[] = ((rawChangeRequests ?? []) as Array<
+    Record<string, unknown>
+  >).map((row) => ({
+    id: String(row.id),
+    project_id: typeof row.project_id === "string" ? row.project_id : undefined,
+    agreement_version_id:
+      typeof row.agreement_version_id === "string" ? row.agreement_version_id : undefined,
+    request_text: typeof row.request_text === "string" ? row.request_text : "",
+    submitted_by_label:
+      typeof row.submitted_by_label === "string" ? row.submitted_by_label : "Client",
+    status: typeof row.status === "string" ? row.status : "OPEN",
+    created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+    resolved_at: typeof row.resolved_at === "string" ? row.resolved_at : null,
+    ai_analysis: row.ai_analysis ?? null,
+    ai_analyzed_at: typeof row.ai_analyzed_at === "string" ? row.ai_analyzed_at : null,
+    ai_model: typeof row.ai_model === "string" ? row.ai_model : null,
+  }));
+
   const projectData: PortalProjectData = {
     id: project.id,
     title: project.title,
@@ -325,7 +410,12 @@ export default async function ClientPortalPage({
     totalAmountMinor: project.total_amount_minor,
     projectStatus: project.status,
     agreementStatus,
+    agreementVersionId: scopeBaselineVersionId ?? agreementVersionId,
     agreementVersionNumber,
+    scopeBaselineVersionNumber: scopeBaselineVersionNumber ?? agreementVersionNumber,
+    scopeBaselineStatus: scopeBaselineStatus ?? agreementStatus,
+    canUseAi: Boolean(process.env.GEMINI_API_KEY),
+    changeRequests: portalChangeRequests,
     milestones: portalMilestones,
   };
 
@@ -335,6 +425,7 @@ export default async function ClientPortalPage({
         token={token}
         projectData={projectData}
         csrfToken={authResult.csrfSecret}
+        initialPaymentReturn={initialPaymentReturn}
       />
     </div>
   );

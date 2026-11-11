@@ -5,6 +5,7 @@ import { getProjectWorkspace } from "@/features/projects/data";
 import { AgreementEditor } from "@/features/agreements/agreement-editor";
 import { agreementDraftSchema } from "@/features/agreements/schema";
 import { MilestonePlanner } from "@/features/milestones/milestone-planner";
+import { ScopeChangePanel } from "@/features/scope-changes/scope-change-panel";
 import { ResendVerificationButton } from "@/features/projects/resend-verification-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -22,13 +23,14 @@ export default async function ProjectWorkspacePage({
     notFound();
   }
 
-  const { project, agreement, versions, milestones, activities } = workspace;
+  const { project, agreement, versions, milestones, activities, changeRequests } = workspace;
   const isClientVerified = Boolean(project.client_email_verified_at);
   const canUseAi = Boolean(process.env.GEMINI_API_KEY);
   const currentVersion =
     versions.find((v) => v.id === agreement?.current_version_id) ?? versions[0] ?? null;
   const approvedVersion = versions.find((v) => v.status === "APPROVED") ?? null;
   const draftVersion = versions.find((v) => v.status === "DRAFT") ?? null;
+  const scopeBaselineVersion = approvedVersion ?? currentVersion;
   const parsedApproved = approvedVersion
     ? agreementDraftSchema.safeParse(approvedVersion.content)
     : null;
@@ -124,6 +126,19 @@ export default async function ProjectWorkspacePage({
         canUseAi={canUseAi}
         isClientVerified={isClientVerified}
         clientEmail={project.client_email}
+      />
+
+      {/* Intelligent Scope-Change Analysis & Change Requests (AI-5) */}
+      <ScopeChangePanel
+        mode="freelancer"
+        projectId={project.id}
+        projectCurrency={project.currency}
+        confirmedBudgetMinor={project.total_amount_minor}
+        agreementVersionId={scopeBaselineVersion?.id ?? null}
+        agreementVersionNumber={scopeBaselineVersion?.version_number ?? null}
+        agreementStatus={scopeBaselineVersion?.status ?? agreement?.status ?? null}
+        canUseAi={canUseAi}
+        initialChangeRequests={changeRequests}
       />
 
       {/* Project Activity Audit Trail */}
