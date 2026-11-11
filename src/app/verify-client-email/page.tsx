@@ -1,3 +1,4 @@
+import { PublicBrandHeader } from "@/components/brand";
 import { VerifyEmailClient } from "./verify-email-client";
 
 export default async function VerifyClientEmailPage({
@@ -7,5 +8,10 @@ export default async function VerifyClientEmailPage({
 }) {
   const { token } = await searchParams;
 
-  return <VerifyEmailClient token={token} />;
+  return (
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <PublicBrandHeader maxWidthClass="max-w-2xl" subtitle="Email Verification" />
+      <VerifyEmailClient token={token} />
+    </div>
+  );
 }

@@ -11,7 +11,9 @@ export function Sidebar() {
 
   return (
     <aside className="hidden min-h-screen w-64 shrink-0 border-r border-ink-800 bg-ink-950 px-4 py-6 text-white lg:flex lg:flex-col">
-      <Brand dark />
+      <Link className="inline-flex w-fit items-center px-1" href="/app">
+        <Brand dark />
+      </Link>
       <nav aria-label="Main navigation" className="mt-12 space-y-1">
         {APP_NAV_LINKS.map(({ label, href, icon: Icon, exact }) => {
           const active = isNavLinkActive(pathname, href, exact);

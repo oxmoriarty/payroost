@@ -277,9 +277,9 @@ export function AppHeader({
           >
             <Menu size={20} />
           </button>
-          <div className="lg:hidden">
+          <Link className="inline-flex items-center lg:hidden" href="/app">
             <Brand compact />
-          </div>
+          </Link>
           <div className="hidden lg:block">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-700">
               Freelancer workspace{userEmail ? ` · ${userEmail}` : ""}
@@ -483,7 +483,13 @@ export function AppHeader({
           />
           <div className="relative z-10 flex w-72 max-w-[82vw] flex-col bg-ink-950 px-5 py-6 text-white shadow-2xl">
             <div className="flex items-center justify-between">
-              <Brand dark />
+              <Link
+                className="inline-flex items-center"
+                href="/app"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <Brand dark size="sm" />
+              </Link>
               <button
                 aria-label="Close navigation"
                 className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white"

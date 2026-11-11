@@ -1,9 +1,67 @@
-import { Landmark } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export function Brand({ dark = false, compact = false }: { dark?: boolean; compact?: boolean }) {
-  return <span className={cn("inline-flex items-center gap-2 font-display text-xl font-semibold tracking-tight", dark ? "text-white" : "text-ink-900")}>
-    <span className={cn("grid size-9 place-items-center rounded-xl", dark ? "bg-teal-600" : "bg-ink-900 text-white")}><Landmark aria-hidden="true" size={18} /></span>
-    {!compact && "Payroost"}
-  </span>;
+const BRAND_SIZE_CLASSES = {
+  sm: "h-6 w-auto",
+  md: "h-7 sm:h-8 w-auto",
+  lg: "h-8 sm:h-9 w-auto",
+} as const;
+
+export interface BrandProps {
+  dark?: boolean;
+  compact?: boolean;
+  size?: keyof typeof BRAND_SIZE_CLASSES;
+  className?: string;
+}
+
+export function Brand({
+  dark = false,
+  compact = false,
+  size,
+  className,
+}: BrandProps) {
+  const effectiveSize = size ?? (compact ? "sm" : "md");
+
+  return (
+    <span className={cn("inline-flex shrink-0 items-center", className)}>
+      <Image
+        alt="Payroost"
+        className={cn("shrink-0 select-none object-contain", BRAND_SIZE_CLASSES[effectiveSize])}
+        height={310}
+        priority
+        src={dark ? "/brand/PayRoostLogo-dark.svg" : "/brand/PayRoostLogo.svg"}
+        unoptimized
+        width={1452}
+      />
+    </span>
+  );
+}
+
+export function PublicBrandHeader({
+  subtitle,
+  maxWidthClass = "max-w-5xl",
+}: {
+  subtitle?: string;
+  maxWidthClass?: string;
+}) {
+  return (
+    <header className="border-b border-ink-100 bg-white/90 backdrop-blur">
+      <div
+        className={cn(
+          "mx-auto flex items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8",
+          maxWidthClass
+        )}
+      >
+        <Link className="inline-flex shrink-0 items-center" href="/">
+          <Brand size="sm" />
+        </Link>
+        {subtitle && (
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+            {subtitle}
+          </span>
+        )}
+      </div>
+    </header>
+  );
 }

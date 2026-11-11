@@ -6,6 +6,7 @@ import { hashPortalToken } from "@/lib/security/tokens";
 import { authenticatePortalSession } from "@/lib/security/portal-session";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Brand, PublicBrandHeader } from "@/components/brand";
 import { type AgreementContentLike } from "@/features/agreements/agreement-document-view";
 import { extractMilestoneNotes } from "@/features/milestones/activity-notes";
 import { syncApprovedAgreementMilestones } from "@/features/milestones/sync";
@@ -122,6 +123,7 @@ export default async function ClientPortalPage({
   if (!authResult.success) {
     return (
       <div className="min-h-screen bg-slate-50">
+        <PublicBrandHeader subtitle="Verified Client Portal" />
         <ClientPortalEntryView
           token={token}
           projectTitle={invitation.projectTitle}
@@ -533,6 +535,7 @@ export default async function ClientPortalPage({
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <PublicBrandHeader subtitle="Verified Client Portal" />
       <ClientPortalWorkspaceView
         token={token}
         projectData={projectData}
@@ -545,7 +548,10 @@ export default async function ClientPortalPage({
 
 function renderUnavailablePortal(message: string) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
+      <Link className="mb-6 inline-flex items-center" href="/">
+        <Brand size="sm" />
+      </Link>
       <Card className="w-full max-w-md p-8 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
           <AlertCircle className="h-7 w-7" />
