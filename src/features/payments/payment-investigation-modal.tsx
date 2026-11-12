@@ -358,14 +358,14 @@ function PaymentInvestigationModalContent({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/55 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-investigation-title"
     >
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="flex max-h-[100dvh] h-[100dvh] w-full max-w-4xl flex-col overflow-hidden rounded-none border-0 border-slate-200 bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl sm:border">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-6 sm:py-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2
@@ -404,7 +404,7 @@ function PaymentInvestigationModalContent({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-6 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2 sm:px-6 sm:py-2.5">
           <div className="flex flex-wrap gap-1.5">
             {[
               { id: "overview" as const, label: "Overview & Ledger", icon: FileSearch },
@@ -430,7 +430,7 @@ function PaymentInvestigationModalContent({
                     setActiveTab(tab.id);
                     setAwaitingConfirmation(false);
                   }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition sm:py-1.5 ${
                     isSelected
                       ? "bg-slate-900 text-white shadow-xs"
                       : "text-slate-600 hover:bg-slate-200/60"
@@ -458,7 +458,7 @@ function PaymentInvestigationModalContent({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           {dossierError && (
             <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -490,31 +490,31 @@ function PaymentInvestigationModalContent({
                     Intent & Provider Identifiers
                   </p>
                   <dl className="mt-2.5 space-y-1.5 text-xs">
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">PayPal Order ID</dt>
                       <dd className="font-mono font-semibold text-slate-900">
                         {dossier?.intent.providerOrderId || row.providerOrderId || "None bound"}
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">PayPal Capture ID</dt>
                       <dd className="font-mono font-semibold text-slate-900">
                         {dossier?.intent.captureId || row.captureId || "—"}
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">Amount / Currency</dt>
                       <dd className="font-semibold text-slate-900">
                         {formatMoney(row.amountCents, row.currency)} ({row.currency})
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">Milestone Rule Status</dt>
                       <dd className="font-semibold text-slate-800">
                         {dossier?.intent.milestoneStatus || "Read-only"} (independent)
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">Created / Approved</dt>
                       <dd className="text-right text-slate-700">
                         {formatDateTime(row.createdAt)}
@@ -532,7 +532,7 @@ function PaymentInvestigationModalContent({
                     Payee & Mode Attribution ({effectiveMode})
                   </p>
                   <dl className="mt-2.5 space-y-1.5 text-xs">
-                    <div className="flex justify-between gap-2">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                       <dt className="text-slate-500">Expected Merchant ID</dt>
                       <dd className="font-mono font-semibold text-slate-900">
                         {dossier?.sellerContext.expectedMerchantId || row.payeeMerchantId || "—"}
@@ -540,19 +540,19 @@ function PaymentInvestigationModalContent({
                     </div>
                     {effectiveMode === "PLATFORM" ? (
                       <>
-                        <div className="flex justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                           <dt className="text-slate-500">Seller Payer ID</dt>
                           <dd className="font-mono text-slate-800">
                             {dossier?.sellerContext.sellerPayerId || row.sellerPayerId || "Missing"}
                           </dd>
                         </div>
-                        <div className="flex justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                           <dt className="text-slate-500">Seller Onboarding</dt>
                           <dd className="font-semibold text-slate-800">
                             {dossier?.sellerContext.accountStatus || (loadingDossier ? "Loading..." : "Unknown")}
                           </dd>
                         </div>
-                        <div className="flex justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                           <dt className="text-slate-500">Receivable / Email Verified</dt>
                           <dd className="text-slate-700">
                             {dossier?.sellerContext.paymentsReceivable === null
@@ -632,13 +632,13 @@ function PaymentInvestigationModalContent({
                 ) : dossier && dossier.transactions.length > 0 ? (
                   <div className="mt-2.5 divide-y divide-slate-100">
                     {dossier.transactions.map((tx) => (
-                      <div key={tx.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
-                        <div>
+                      <div key={tx.id} className="flex flex-col gap-2 py-2.5 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:py-2">
+                        <div className="min-w-0">
                           <span className="font-bold text-slate-900">{tx.transactionType}</span>{" "}
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
+                          <span className="break-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
                             {tx.providerReferenceId}
                           </span>
-                          <span className="ml-2 text-slate-500">Payee: {tx.payeeMerchantId || "—"}</span>
+                          <span className="mt-1 block break-all text-slate-500 sm:ml-2 sm:mt-0 sm:inline">Payee: {tx.payeeMerchantId || "—"}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="font-semibold text-slate-900">
@@ -714,7 +714,7 @@ function PaymentInvestigationModalContent({
                       </span>
                     </div>
 
-                    <div className="mt-2.5 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-4">
+                    <div className="mt-2.5 grid grid-cols-1 gap-2 text-[11px] text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
                       <div>
                         Attempts: <strong className="text-slate-900">{wh.attemptCount}</strong>
                       </div>
@@ -837,12 +837,12 @@ function PaymentInvestigationModalContent({
                     )}
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                  <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                     <Button
                       variant="secondary"
                       onClick={() => setAwaitingConfirmation(false)}
                       disabled={isSubmitting}
-                      className="text-xs"
+                      className="w-full text-xs sm:w-auto"
                     >
                       Back to Selection
                     </Button>
@@ -850,7 +850,7 @@ function PaymentInvestigationModalContent({
                       variant={activeDescriptor.destructive ? "danger" : "primary"}
                       onClick={handleConfirmExecute}
                       disabled={isSubmitting}
-                      className="text-xs"
+                      className="w-full text-xs sm:w-auto"
                     >
                       {isSubmitting ? (
                         <>
@@ -922,7 +922,7 @@ function PaymentInvestigationModalContent({
                       <select
                         value={selectedWebhookId || ""}
                         onChange={(e) => setSelectedWebhookId(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base text-slate-800 sm:text-xs"
                       >
                         {dossier.webhooks.map((w) => (
                           <option
@@ -952,7 +952,7 @@ function PaymentInvestigationModalContent({
                       rows={2}
                       maxLength={500}
                       placeholder="Document why recovery is being executed (stored in activity_events)..."
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-slate-400 focus:outline-none"
+                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-base focus:border-slate-400 focus:outline-none sm:text-xs"
                     />
                   </div>
                 </>
@@ -979,17 +979,17 @@ function PaymentInvestigationModalContent({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-6 py-3.5">
+        <div className="flex flex-col gap-2.5 border-t border-slate-200 bg-slate-50/70 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
           <div className="text-[11px] text-slate-500">
             <Eye className="mr-1 inline h-3.5 w-3.5" />
             All mutations require CSRF verification & server-side owner authorization.
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               onClick={onClose}
               disabled={isSubmitting}
-              className="text-xs"
+              className="flex-1 text-xs sm:flex-initial"
             >
               Close
             </Button>
@@ -997,7 +997,7 @@ function PaymentInvestigationModalContent({
               <Button
                 variant="primary"
                 onClick={() => setActiveTab("recover")}
-                className="text-xs"
+                className="flex-1 text-xs sm:flex-initial"
               >
                 Open Recovery Controls
               </Button>
@@ -1007,7 +1007,7 @@ function PaymentInvestigationModalContent({
                 variant={activeDescriptor?.destructive ? "danger" : "primary"}
                 onClick={() => setAwaitingConfirmation(true)}
                 disabled={!activeDescriptor?.allowed || isSubmitting}
-                className="text-xs"
+                className="flex-1 text-xs sm:flex-initial"
               >
                 Review & Confirm
               </Button>

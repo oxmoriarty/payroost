@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AllCommunityModule, type ColDef, type GridApi, type GridReadyEvent } from "ag-grid-community";
 import { AgGridProvider, AgGridReact } from "ag-grid-react";
@@ -53,6 +53,20 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
   const [selectedRow, setSelectedRow] = useState<PaymentOperationRow | null>(null);
   const [modalInitialView, setModalInitialView] = useState<"inspect" | "recover">("inspect");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileViewport(mql.matches);
+    update();
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", update);
+      return () => mql.removeEventListener("change", update);
+    }
+    mql.addListener(update);
+    return () => mql.removeListener(update);
+  }, []);
 
   const onGridReady = useCallback((params: GridReadyEvent<PaymentOperationRow>) => {
     gridApiRef.current = params.api;
@@ -604,7 +618,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
               aria-label="Search payments"
               value={searchQuery}
               onChange={handleSearchChange}
-              className="h-9 w-64 rounded-xl border border-ink-200 bg-white pl-8 pr-3 text-xs text-ink-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="h-10 w-full rounded-xl border border-ink-200 bg-white pl-8 pr-3 text-base text-ink-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:h-9 sm:w-64 sm:text-xs"
             />
           </div>
           <Button
@@ -619,14 +633,14 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
       </div>
 
       {/* Multi-Dimensional Operational Filters */}
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-ink-100 bg-ink-50/60 p-3 text-xs">
+      <div className="grid grid-cols-2 gap-2.5 rounded-xl border border-ink-100 bg-ink-50/60 p-3 text-xs sm:flex sm:flex-wrap sm:items-end sm:gap-3">
         <label className="flex flex-col gap-1">
           <span className="font-semibold text-ink-600">Payment Mode</span>
           <select
             aria-label="Filter by payment mode"
             value={modeFilter}
             onChange={(e) => setModeFilter(e.target.value as "ALL" | "PLATFORM" | "MERCHANT")}
-            className="h-8 rounded-lg border border-ink-200 bg-white px-2.5 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-base text-ink-900 sm:h-8 sm:w-auto sm:text-xs"
           >
             <option value="ALL">All Modes</option>
             <option value="PLATFORM">PLATFORM</option>
@@ -640,7 +654,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
             aria-label="Filter by currency"
             value={currencyFilter}
             onChange={(e) => setCurrencyFilter(e.target.value)}
-            className="h-8 rounded-lg border border-ink-200 bg-white px-2.5 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-base text-ink-900 sm:h-8 sm:w-auto sm:text-xs"
           >
             <option value="ALL">All Currencies</option>
             {distinctCurrencies.map((cur) => (
@@ -651,13 +665,13 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
           <span className="font-semibold text-ink-600">Seller / Payee</span>
           <select
             aria-label="Filter by seller or payee"
             value={payeeFilter}
             onChange={(e) => setPayeeFilter(e.target.value)}
-            className="h-8 max-w-[200px] rounded-lg border border-ink-200 bg-white px-2.5 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-base text-ink-900 sm:h-8 sm:w-auto sm:max-w-[200px] sm:text-xs"
           >
             <option value="ALL">All Sellers / Payees</option>
             {distinctPayees.map((payee) => (
@@ -668,13 +682,13 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
           <span className="font-semibold text-ink-600">Webhook State</span>
           <select
             aria-label="Filter by webhook state"
             value={webhookFilter}
             onChange={(e) => setWebhookFilter(e.target.value)}
-            className="h-8 rounded-lg border border-ink-200 bg-white px-2.5 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-base text-ink-900 sm:h-8 sm:w-auto sm:text-xs"
           >
             <option value="ALL">All Webhook States</option>
             <option value="EXHAUSTED">Attempts Exhausted</option>
@@ -695,7 +709,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
             aria-label="Filter from date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 rounded-lg border border-ink-200 bg-white px-2 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2 text-base text-ink-900 sm:h-8 sm:w-auto sm:text-xs"
           />
         </label>
 
@@ -706,7 +720,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
             aria-label="Filter to date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-8 rounded-lg border border-ink-200 bg-white px-2 text-xs text-ink-900"
+            className="h-10 w-full rounded-lg border border-ink-200 bg-white px-2 text-base text-ink-900 sm:h-8 sm:w-auto sm:text-xs"
           />
         </label>
 
@@ -743,11 +757,121 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
             </Button>
           )}
         </div>
-      ) : (
-        <div
-          aria-label="Payment Operations transaction table"
-          className="payroost-grid ag-theme-quartz h-[540px] w-full overflow-hidden rounded-xl border border-ink-100"
-        >
+      ) : isMobileViewport ? (
+          <div aria-label="Payment Operations transaction table" className="space-y-3">
+            {filteredRows.map((data) => {
+              const hasOwnerAuth = Boolean(isOwner || data.isOwner);
+              const needsAttention =
+                data.status !== "COMPLETED" &&
+                (data.status === "RECONCILIATION_REQUIRED" ||
+                  data.hasExpiredLease ||
+                  data.status === "ORDER_CREATED" ||
+                  data.status === "BUYER_APPROVED" ||
+                  data.status === "ORDER_CREATING" ||
+                  data.status === "CAPTURING" ||
+                  Boolean(data.webhookIsExhausted) ||
+                  data.webhookStatus === "FAILED" ||
+                  data.webhookStatus === "REQUIRES_RECONCILIATION");
+              const mode = data.paymentMode || "MERCHANT";
+              const amountVal =
+                data.amountCents || (data as unknown as { amountMinor?: number }).amountMinor || 0;
+              return (
+                <div
+                  className="space-y-3 rounded-xl border border-ink-200 bg-white p-4 shadow-xs"
+                  key={data.id}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="break-all font-mono text-xs font-bold text-ink-950">
+                          {data.reference || data.id.slice(0, 8)}
+                        </span>
+                        {data.hasInconsistency && (
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs font-medium text-ink-900">
+                        {data.projectName || "—"}
+                      </p>
+                      <p className="text-[11px] text-ink-600">
+                        {data.milestoneName || "—"} · Client: {data.clientName || "—"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-display text-base font-bold text-ink-950">
+                        {formatMoney(amountVal, data.currency || "USD")}
+                      </p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                          mode === "PLATFORM"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {mode}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <Badge tone={data.status === "COMPLETED" ? "success" : data.status === "RECONCILIATION_REQUIRED" ? "warning" : "info"}>
+                      {data.status.replaceAll("_", " ")}
+                    </Badge>
+                    {data.hasExpiredLease && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                        <Clock className="h-2.5 w-2.5" /> Expired Lease
+                      </span>
+                    )}
+                    {data.webhookStatus && (
+                      <Badge tone={data.webhookStatus === "PROCESSED" ? "success" : data.webhookIsExhausted ? "warning" : "neutral"}>
+                        Webhook: {getWebhookDisplayLabel(data.webhookStatus)}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {(data.providerOrderId || data.captureId || data.payeeMerchantId) && (
+                    <div className="space-y-0.5 rounded-lg bg-slate-50 p-2.5 font-mono text-[10px] text-ink-600">
+                      {data.payeeMerchantId && (
+                        <p className="break-all">Payee: {data.payeeMerchantId}</p>
+                      )}
+                      {data.providerOrderId && (
+                        <p className="break-all text-teal-800">Order: {data.providerOrderId}</p>
+                      )}
+                      {data.captureId && <p className="break-all">Capture: {data.captureId}</p>}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      aria-label={`Inspect payment ${data.reference}`}
+                      className="flex-1 text-xs"
+                      onClick={() => openModal(data, "inspect")}
+                      variant="secondary"
+                    >
+                      <Eye className="mr-1.5 h-3.5 w-3.5" />
+                      Inspect
+                    </Button>
+                    {hasOwnerAuth && needsAttention && (
+                      <Button
+                        aria-label={`Recover payment ${data.reference}`}
+                        className="flex-1 text-xs"
+                        onClick={() => openModal(data, "recover")}
+                        variant="primary"
+                      >
+                        <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                        Recover
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            aria-label="Payment Operations transaction table"
+            className="payroost-grid ag-theme-quartz h-[540px] w-full overflow-hidden rounded-xl border border-ink-100"
+          >
           <AgGridProvider modules={[AllCommunityModule]}>
             <AgGridReact<PaymentOperationRow>
               columnDefs={columns}

@@ -82,7 +82,7 @@ export function ProjectsListView({ projects }: { projects: ProjectSummaryItem[] 
           />
           <input
             aria-label="Search projects"
-            className="w-full rounded-xl border border-ink-200 bg-ink-50/40 py-2 pl-10 pr-4 text-sm text-ink-950 outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
+            className="w-full rounded-xl border border-ink-200 bg-ink-50/40 py-2.5 pl-10 pr-4 text-base text-ink-950 outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 sm:py-2 sm:text-sm"
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by project title, client name, or client email..."
             type="search"

@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   return (
     <>
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Settings</p>
-      <h1 className="mt-2 font-display text-4xl text-ink-950">Account & Payouts</h1>
+      <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">Account & Payouts</h1>
 
       {/* Phase 3B.R1: PayPal Seller Payout Connection */}
       <Suspense

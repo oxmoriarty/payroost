@@ -49,7 +49,7 @@ export function PublicBrandHeader({
     <header className="border-b border-ink-100 bg-white/90 backdrop-blur">
       <div
         className={cn(
-          "mx-auto flex items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8",
+          "mx-auto flex items-center justify-between gap-3 px-4 py-3.5 sm:gap-4 sm:px-6 lg:px-8",
           maxWidthClass
         )}
       >
@@ -57,7 +57,7 @@ export function PublicBrandHeader({
           <Brand size="sm" />
         </Link>
         {subtitle && (
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+          <span className="min-w-0 truncate text-right text-[11px] font-semibold uppercase tracking-wider text-ink-600 sm:text-xs">
             {subtitle}
           </span>
         )}

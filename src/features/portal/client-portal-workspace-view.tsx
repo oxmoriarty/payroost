@@ -414,18 +414,18 @@ export function ClientPortalWorkspaceView({
                         </div>
 
                         {milestone.description && (
-                          <p className="text-sm text-ink-700 leading-relaxed pl-8">
+                          <p className="pl-0 text-sm leading-relaxed text-ink-700 sm:pl-8">
                             {milestone.description}
                           </p>
                         )}
 
                         {milestone.deliverables && milestone.deliverables.length > 0 && (
-                          <div className="pl-8 pt-1">
+                          <div className="pl-0 pt-1 sm:pl-8">
                             <p className="text-xs font-semibold text-ink-600 uppercase tracking-wider">Deliverables:</p>
                             <ul className="mt-1 space-y-1 text-xs text-ink-800">
                               {milestone.deliverables.map((deliv, dIdx) => (
-                                <li key={dIdx} className="flex items-center gap-1.5">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-teal-600 shrink-0" />
+                                <li key={dIdx} className="flex items-start gap-1.5">
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" />
                                   <span>{deliv}</span>
                                 </li>
                               ))}
@@ -434,14 +434,14 @@ export function ClientPortalWorkspaceView({
                         )}
 
                         {milestone.acceptanceCriteria && milestone.acceptanceCriteria.length > 0 && (
-                          <div className="pl-8 pt-1">
+                          <div className="pl-0 pt-1 sm:pl-8">
                             <p className="text-xs font-semibold text-teal-800 uppercase tracking-wider">
                               Acceptance Criteria:
                             </p>
                             <ul className="mt-1 space-y-1 text-xs text-ink-800">
                               {milestone.acceptanceCriteria.map((criterion, cIdx) => (
-                                <li key={cIdx} className="flex items-center gap-1.5">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
+                                <li key={cIdx} className="flex items-start gap-1.5">
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
                                   <span>{criterion}</span>
                                 </li>
                               ))}
@@ -450,34 +450,34 @@ export function ClientPortalWorkspaceView({
                         )}
 
                         {(milestone.latestSubmissionNote || milestone.latestDeliverableUrl) && (
-                          <div className="ml-8 rounded-xl border border-teal-200/80 bg-teal-50/40 p-3 text-xs text-ink-800">
+                          <div className="ml-0 rounded-xl border border-teal-200/80 bg-teal-50/40 p-3 text-xs text-ink-800 sm:ml-8">
                             <p className="font-bold text-teal-900">Freelancer Submission Note</p>
                             {milestone.latestSubmissionNote && (
                               <p className="mt-1 whitespace-pre-line">{milestone.latestSubmissionNote}</p>
                             )}
                             {milestone.latestDeliverableUrl && (
                               <a
-                                className="mt-1.5 inline-flex items-center gap-1 font-semibold text-teal-700 hover:underline"
+                                className="mt-1.5 inline-flex flex-wrap items-center gap-1 break-all font-semibold text-teal-700 hover:underline"
                                 href={milestone.latestDeliverableUrl}
                                 rel="noopener noreferrer"
                                 target="_blank"
                               >
-                                Open submitted deliverable link <ExternalLink className="h-3 w-3" />
+                                Open submitted deliverable link <ExternalLink className="h-3 w-3 shrink-0" />
                               </a>
                             )}
                           </div>
                         )}
 
                         {milestone.latestFeedbackNote && (
-                          <div className="ml-8 rounded-xl border border-ink-200 bg-ink-50 p-3 text-xs text-ink-800">
+                          <div className="ml-0 rounded-xl border border-ink-200 bg-ink-50 p-3 text-xs text-ink-800 sm:ml-8">
                             <p className="font-bold text-ink-900">Your Latest Review Note</p>
                             <p className="mt-1 whitespace-pre-line">{milestone.latestFeedbackNote}</p>
                           </div>
                         )}
 
                         {milestone.dueDate && (
-                          <div className="flex items-center gap-1.5 pl-8 pt-1 text-xs text-ink-500">
-                            <Calendar className="h-3.5 w-3.5" />
+                          <div className="flex items-center gap-1.5 pl-0 pt-1 text-xs text-ink-500 sm:pl-8">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
                             <span>Target Completion: {new Date(milestone.dueDate).toLocaleDateString()}</span>
                           </div>
                         )}
@@ -485,7 +485,7 @@ export function ClientPortalWorkspaceView({
                         {/* Deliverable Acceptance & Revision Review Controls */}
                         {reviewMessageByMilestone[milestone.id] && (
                           <div
-                            className={`ml-8 rounded-xl border p-3 text-xs ${
+                            className={`ml-0 rounded-xl border p-3 text-xs sm:ml-8 ${
                               reviewMessageByMilestone[milestone.id].type === "success"
                                 ? "border-emerald-200 bg-emerald-50 text-emerald-950"
                                 : "border-red-200 bg-red-50 text-red-950"
@@ -497,7 +497,7 @@ export function ClientPortalWorkspaceView({
                         )}
 
                         {milestone.status === "SUBMITTED" && (
-                          <div className="ml-8 mt-3 space-y-3 rounded-xl border border-ink-200 bg-slate-50/80 p-4">
+                          <div className="ml-0 mt-3 space-y-3 rounded-xl border border-ink-200 bg-slate-50/80 p-3.5 sm:ml-8 sm:p-4">
                             <p className="text-xs font-bold uppercase tracking-wider text-ink-800">
                               Deliverable Review Required
                             </p>
@@ -537,7 +537,7 @@ export function ClientPortalWorkspaceView({
                                         ? "Optional acceptance feedback"
                                         : "Describe required revisions (min 3 characters)"}
                                       <textarea
-                                        className="mt-1.5 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                                        className="mt-1.5 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                                         minLength={reviewActionMode === "REQUEST_REVISION" ? 3 : 0}
                                         onChange={(e) => setReviewNote(e.target.value)}
                                         placeholder={
@@ -551,7 +551,7 @@ export function ClientPortalWorkspaceView({
                                     </label>
                                     <div className="flex flex-wrap gap-2">
                                       <Button
-                                        className="min-h-8 px-3 text-xs"
+                                        className="min-h-10 px-3 text-xs sm:min-h-8"
                                         disabled={reviewBusyId === milestone.id}
                                         type="submit"
                                       >
@@ -567,7 +567,7 @@ export function ClientPortalWorkspaceView({
                                         )}
                                       </Button>
                                       <Button
-                                        className="min-h-8 px-3 text-xs"
+                                        className="min-h-10 px-3 text-xs sm:min-h-8"
                                         disabled={reviewBusyId === milestone.id}
                                         onClick={() => {
                                           setReviewFormMilestoneId(null);
@@ -586,7 +586,7 @@ export function ClientPortalWorkspaceView({
                                       milestone.currency !== "USD" ||
                                       milestone.amountMinor <= 0) && (
                                       <Button
-                                        className="min-h-8 px-3 text-xs"
+                                        className="min-h-10 px-3 text-xs sm:min-h-8"
                                         onClick={() => {
                                           setReviewActionMode("ACCEPT");
                                           setReviewFormMilestoneId(milestone.id);
@@ -599,7 +599,7 @@ export function ClientPortalWorkspaceView({
                                       </Button>
                                     )}
                                     <Button
-                                      className="min-h-8 px-3 text-xs"
+                                      className="min-h-10 px-3 text-xs sm:min-h-8"
                                       onClick={() => {
                                         setReviewActionMode("REQUEST_REVISION");
                                         setReviewFormMilestoneId(milestone.id);
@@ -620,7 +620,7 @@ export function ClientPortalWorkspaceView({
                       </div>
 
                       {/* Right Column: Amount & Pay Action */}
-                      <div className="flex flex-row items-center justify-between sm:flex-col sm:items-end gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-ink-100">
+                      <div className="flex flex-row flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-3 sm:flex-col sm:items-end sm:border-t-0 sm:pt-0">
                         <span className="font-display text-xl font-bold text-ink-950 sm:text-2xl">
                           {formatMoney(milestone.amountMinor, milestone.currency)}
                         </span>

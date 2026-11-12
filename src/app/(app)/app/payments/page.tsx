@@ -29,15 +29,15 @@ export default async function PaymentOperationsPage() {
           <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">
             Payment Operations & Recovery
           </p>
-          <h1 className="mt-2 font-display text-4xl text-ink-950">
+          <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">
             Financial ledger, recovery, and observability.
           </h1>
-          <p className="mt-2 max-w-2xl text-ink-700">
+          <p className="mt-2 max-w-2xl text-sm text-ink-700 sm:text-base">
             Authoritative operational view of PayPal Sandbox payments. Monitor active transactions,
             investigate ambiguous states, and execute audited reconciliation without compromising ledger immutability.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {summary.reconciliationRequired > 0 && (
             <Badge tone="warning" className="bg-rose-50 text-rose-800 ring-rose-300">
               {summary.reconciliationRequired} Requires Attention
@@ -50,41 +50,41 @@ export default async function PaymentOperationsPage() {
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-ink-700">Total Intents</p>
-          <p className="mt-3 font-display text-3xl text-ink-950">{summary.totalRecords}</p>
-          <p className="mt-1 text-xs text-ink-500">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 lg:grid-cols-4">
+        <Card className="p-4 sm:p-5">
+          <p className="text-xs font-semibold text-ink-700 sm:text-sm">Total Intents</p>
+          <p className="mt-2 font-display text-2xl text-ink-950 sm:mt-3 sm:text-3xl">{summary.totalRecords}</p>
+          <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">
             Platform: {summary.platformCount ?? 0} • Merchant: {summary.merchantCount ?? 0}
           </p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-ink-700">Confirmed Captures</p>
-          <p className="mt-3 font-display text-3xl text-emerald-700">
+        <Card className="p-4 sm:p-5">
+          <p className="text-xs font-semibold text-ink-700 sm:text-sm">Confirmed Captures</p>
+          <p className="mt-2 font-display text-2xl text-emerald-700 sm:mt-3 sm:text-3xl">
             {summary.confirmedCaptures}
           </p>
-          <p className="mt-1 text-xs text-ink-500">
+          <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">
             Volume: {formatMoney(summary.totalVolumeCents, "USD")}
           </p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-ink-700">Needs Reconciliation</p>
+        <Card className="p-4 sm:p-5">
+          <p className="text-xs font-semibold text-ink-700 sm:text-sm">Needs Reconciliation</p>
           <p
-            className={`mt-3 font-display text-3xl ${
+            className={`mt-2 font-display text-2xl sm:mt-3 sm:text-3xl ${
               summary.reconciliationRequired > 0 ? "text-rose-600 font-bold" : "text-ink-950"
             }`}
           >
             {summary.reconciliationRequired}
           </p>
-          <p className="mt-1 text-xs text-ink-500">
+          <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">
             Expired leases: {summary.expiredLeases ?? 0} • Exhausted webhooks:{" "}
             {summary.exhaustedWebhooks ?? 0}
           </p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-ink-700">In-Flight / Pending</p>
-          <p className="mt-3 font-display text-3xl text-amber-600">{summary.inFlight}</p>
-          <p className="mt-1 text-xs text-ink-500">Active checkout or capture</p>
+        <Card className="p-4 sm:p-5">
+          <p className="text-xs font-semibold text-ink-700 sm:text-sm">In-Flight / Pending</p>
+          <p className="mt-2 font-display text-2xl text-amber-600 sm:mt-3 sm:text-3xl">{summary.inFlight}</p>
+          <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">Active checkout or capture</p>
         </Card>
       </div>
 

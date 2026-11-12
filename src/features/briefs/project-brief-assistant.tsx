@@ -125,7 +125,7 @@ export function ProjectBriefAssistant({
               Client&apos;s project description or notes
               <textarea
                 aria-label="Client project description"
-                className="mt-2 min-h-36 w-full rounded-xl border border-ink-200 bg-white p-3.5 text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="mt-2 min-h-36 w-full rounded-xl border border-ink-200 bg-white p-3.5 text-base text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                 maxLength={10000}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Example: Client needs an e-commerce website for their clothing business. They want to sell apparel, showcase lookbooks, and need customer accounts. No budget or launch date has been stated yet..."
@@ -222,7 +222,7 @@ export function ProjectBriefAssistant({
                 Project summary
                 <textarea
                   aria-label="Project summary"
-                  className="mt-1.5 min-h-24 w-full rounded-xl border border-ink-200 bg-white p-3 text-sm text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                  className="mt-1.5 min-h-24 w-full rounded-xl border border-ink-200 bg-white p-3 text-base text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                   maxLength={3000}
                   onChange={(e) => setBrief({ ...brief, summary: e.target.value })}
                   value={brief.summary}
@@ -253,7 +253,7 @@ export function ProjectBriefAssistant({
                   <div className="flex items-center gap-2" key={idx}>
                     <input
                       aria-label={`Deliverable ${idx + 1}`}
-                      className="flex-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                      className="min-w-0 flex-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-base text-ink-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                       onChange={(e) => setBrief({ ...brief, deliverables: updateListItem(brief.deliverables, idx, e.target.value) })}
                       value={item}
                     />
@@ -344,7 +344,7 @@ export function ProjectBriefAssistant({
                     <div className="flex items-center gap-2" key={idx}>
                       <input
                         aria-label={`Assumption ${idx + 1}`}
-                        className="flex-1 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-ink-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                        className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-3 py-2 text-base text-ink-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 sm:text-sm"
                         onChange={(e) => setBrief({ ...brief, assumptions: updateListItem(brief.assumptions, idx, e.target.value) })}
                         value={item}
                       />
@@ -363,12 +363,12 @@ export function ProjectBriefAssistant({
             </div>
 
             {/* 5. Open Questions & Missing Information (Distinct Highlighting) */}
-            <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-5">
+            <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                   <HelpCircle className="h-5 w-5 shrink-0 text-teal-700 mt-0.5" />
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h4 className="text-sm font-bold text-teal-950 uppercase tracking-wide">
                         Open Questions & Missing Information ({brief.openQuestions.length})
                       </h4>
@@ -380,7 +380,7 @@ export function ProjectBriefAssistant({
                   </div>
                 </div>
                 <Button
-                  className="min-h-8 px-2.5 text-xs text-teal-900 border-teal-300 hover:bg-teal-100"
+                  className="min-h-8 shrink-0 px-2.5 text-xs text-teal-900 border-teal-300 hover:bg-teal-100"
                   onClick={() => setBrief({ ...brief, openQuestions: addListItem(brief.openQuestions, "New clarification question") })}
                   variant="secondary"
                 >
@@ -396,7 +396,7 @@ export function ProjectBriefAssistant({
                     <div className="flex items-center gap-2" key={idx}>
                       <input
                         aria-label={`Open question ${idx + 1}`}
-                        className="flex-1 rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-ink-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20"
+                        className="min-w-0 flex-1 rounded-lg border border-teal-200 bg-white px-3 py-2 text-base text-ink-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 sm:text-sm"
                         onChange={(e) => setBrief({ ...brief, openQuestions: updateListItem(brief.openQuestions, idx, e.target.value) })}
                         value={item}
                       />
@@ -432,13 +432,13 @@ export function ProjectBriefAssistant({
                     <div className="flex items-center gap-1.5" key={idx}>
                       <input
                         aria-label={`Scope inclusion ${idx + 1}`}
-                        className="flex-1 rounded border border-ink-200 bg-white px-2.5 py-1.5 text-xs text-ink-900 outline-none focus:border-teal-600"
+                        className="min-w-0 flex-1 rounded border border-ink-200 bg-white px-2.5 py-2 text-base text-ink-900 outline-none focus:border-teal-600 sm:py-1.5 sm:text-xs"
                         onChange={(e) => setBrief({ ...brief, scopeInclusions: updateListItem(brief.scopeInclusions, idx, e.target.value) })}
                         value={item}
                       />
                       <button
                         aria-label={`Remove scope inclusion ${idx + 1}`}
-                        className="p-1 text-ink-400 hover:text-red-600"
+                        className="p-2 text-ink-400 hover:text-red-600 sm:p-1"
                         onClick={() => setBrief({ ...brief, scopeInclusions: removeListItem(brief.scopeInclusions, idx) })}
                         type="button"
                       >
@@ -465,13 +465,13 @@ export function ProjectBriefAssistant({
                     <div className="flex items-center gap-1.5" key={idx}>
                       <input
                         aria-label={`Scope exclusion ${idx + 1}`}
-                        className="flex-1 rounded border border-ink-200 bg-white px-2.5 py-1.5 text-xs text-ink-900 outline-none focus:border-teal-600"
+                        className="min-w-0 flex-1 rounded border border-ink-200 bg-white px-2.5 py-2 text-base text-ink-900 outline-none focus:border-teal-600 sm:py-1.5 sm:text-xs"
                         onChange={(e) => setBrief({ ...brief, scopeExclusions: updateListItem(brief.scopeExclusions, idx, e.target.value) })}
                         value={item}
                       />
                       <button
                         aria-label={`Remove scope exclusion ${idx + 1}`}
-                        className="p-1 text-ink-400 hover:text-red-600"
+                        className="p-2 text-ink-400 hover:text-red-600 sm:p-1"
                         onClick={() => setBrief({ ...brief, scopeExclusions: removeListItem(brief.scopeExclusions, idx) })}
                         type="button"
                       >
@@ -489,7 +489,7 @@ export function ProjectBriefAssistant({
                 Timeline expectations
                 <input
                   aria-label="Timeline expectations"
-                  className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2 text-sm text-ink-900 outline-none focus:border-teal-600"
+                  className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2 text-base text-ink-900 outline-none focus:border-teal-600 sm:text-sm"
                   onChange={(e) => setBrief({ ...brief, timelineExpectations: e.target.value || null })}
                   placeholder="Not specified by client"
                   value={brief.timelineExpectations ?? ""}

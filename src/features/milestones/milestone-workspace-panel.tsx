@@ -421,7 +421,7 @@ export function MilestoneWorkspacePanel({
                         <label className="block text-xs font-semibold text-ink-800">
                           Deliverable summary &amp; handoff notes (required)
                           <textarea
-                            className="mt-1.5 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                            className="mt-1.5 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                             minLength={3}
                             onChange={(e) => setSubmissionNote(e.target.value)}
                             placeholder="Summarize completed deliverables and how the client should verify acceptance criteria..."
@@ -432,7 +432,7 @@ export function MilestoneWorkspacePanel({
                         <label className="block text-xs font-semibold text-ink-800">
                           Deliverable URL (optional, https:// or http://)
                           <input
-                            className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                            className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                             onChange={(e) => setDeliverableUrl(e.target.value)}
                             placeholder="https://..."
                             type="url"
@@ -441,7 +441,7 @@ export function MilestoneWorkspacePanel({
                         </label>
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button
-                            className="min-h-8 px-3 text-xs"
+                            className="min-h-10 px-3 text-xs sm:min-h-8"
                             disabled={isBusy}
                             onClick={() => setActiveSubmitId(null)}
                             type="button"
@@ -449,7 +449,7 @@ export function MilestoneWorkspacePanel({
                           >
                             Cancel
                           </Button>
-                          <Button className="min-h-8 px-3 text-xs" disabled={isBusy} type="submit">
+                          <Button className="min-h-10 px-3 text-xs sm:min-h-8" disabled={isBusy} type="submit">
                             {isBusy ? (
                               <>
                                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

@@ -119,7 +119,7 @@ export function NewProjectForm() {
           <label className="block text-sm font-semibold text-ink-800">
             Project brief
             <textarea
-              className="mt-2 min-h-44 w-full rounded-xl border border-ink-200 bg-white p-3 font-normal outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="mt-2 min-h-44 w-full rounded-xl border border-ink-200 bg-white p-3 text-base font-normal outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
               name="brief"
               minLength={20}
               maxLength={20000}
@@ -131,7 +131,7 @@ export function NewProjectForm() {
           </label>
 
           <div className="flex justify-end">
-            <Button type="submit">Create project workspace</Button>
+            <Button className="w-full sm:w-auto" type="submit">Create project workspace</Button>
           </div>
         </form>
       </Card>
@@ -148,7 +148,7 @@ function Field({
     <label className="block text-sm font-semibold text-ink-800">
       {label}
       <input
-        className="mt-2 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 font-normal outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+        className="mt-2 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-base font-normal outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
         {...props}
       />
       {hint && <span className="mt-1 block text-xs font-normal text-ink-700">{hint}</span>}

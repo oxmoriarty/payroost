@@ -266,7 +266,7 @@ export function PayPalSellerSettingsCard() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
               <div className="rounded-xl border border-ink-100 bg-ink-50/50 p-3">
                 <span className="text-xs font-medium text-ink-500">Merchant Account ID</span>
-                <p className="mt-0.5 font-mono font-semibold text-ink-900">
+                <p className="mt-0.5 break-all font-mono font-semibold text-ink-900">
                   {statusData.sellerMerchantIdMasked ?? "Verified"}
                 </p>
               </div>
@@ -279,13 +279,13 @@ export function PayPalSellerSettingsCard() {
             </div>
 
             {statusData.sellerEmail && (
-              <p className="text-xs text-ink-500">
+              <p className="break-all text-xs text-ink-500">
                 Connected Sandbox Account Email: <span className="font-mono text-ink-700">{statusData.sellerEmail}</span>
               </p>
             )}
 
-            <div className="flex items-center gap-2 text-xs text-ink-500">
-              <ShieldCheck className="h-4 w-4 text-teal-600" />
+            <div className="flex items-start gap-2 text-xs text-ink-500 sm:items-center">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 sm:mt-0" />
               <span>Payments route directly to your Sandbox seller balance upon client milestone approval.</span>
             </div>
           </div>
@@ -307,7 +307,7 @@ export function PayPalSellerSettingsCard() {
                 variant="primary"
                 onClick={handleConnectPayPal}
                 disabled={isInitiating}
-                className="gap-2"
+                className="w-full gap-2 sm:w-auto"
               >
                 {isInitiating ? (
                   <>

@@ -487,9 +487,9 @@ export function MilestoneCheckout({
   ]);
 
   return (
-    <Card className="overflow-hidden border border-ink-100 bg-white p-6 shadow-sm sm:p-8">
+    <Card className="overflow-hidden border border-ink-100 bg-white p-4 shadow-sm sm:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-ink-100 pb-5">
+      <div className="flex flex-col gap-2 border-b border-ink-100 pb-4 sm:flex-row sm:items-center sm:justify-between sm:pb-5">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
             Milestone Checkout
@@ -498,9 +498,9 @@ export function MilestoneCheckout({
             {milestone.title}
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Badge tone="info">PayPal Sandbox</Badge>
-          <span className="font-display text-2xl font-extrabold text-ink-950">
+          <span className="font-display text-xl font-extrabold text-ink-950 sm:text-2xl">
             {formatMoney(milestone.amountMinor, milestone.currency)}
           </span>
         </div>
@@ -561,7 +561,7 @@ export function MilestoneCheckout({
 
       {/* State A: COMPLETED */}
       {step === "COMPLETED" && (
-        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 text-center">
+        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-center sm:p-6">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
             <CheckCircle2 className="h-8 w-8" />
           </div>
@@ -573,11 +573,11 @@ export function MilestoneCheckout({
             been completed on PayPal and verified on the ledger.
           </p>
           {captureId && (
-            <p className="mt-2 text-xs font-mono text-emerald-700">
+            <p className="mt-2 break-all text-xs font-mono text-emerald-700">
               Provider Capture ID: <span className="font-bold">{captureId}</span>
             </p>
           )}
-          <div className="mt-5 flex justify-center gap-3">
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Button
               variant="secondary"
               onClick={() => {
@@ -592,10 +592,10 @@ export function MilestoneCheckout({
 
       {/* State B: PENDING_RECONCILIATION */}
       {step === "PENDING_RECONCILIATION" && (
-        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-6">
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-6">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
-            <div>
+            <div className="min-w-0 flex-1">
               <h3 className="font-display text-base font-bold text-amber-950">
                 Payment Verification Pending
               </h3>
@@ -608,7 +608,7 @@ export function MilestoneCheckout({
                 this milestone. PayRoost will update the status automatically once provider
                 confirmation completes.
               </div>
-              <div className="mt-4 flex gap-3">
+              <div className="mt-4 flex flex-wrap gap-3">
                 <Button
                   variant="secondary"
                   className="text-xs"

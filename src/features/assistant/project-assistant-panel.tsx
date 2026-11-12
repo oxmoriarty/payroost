@@ -424,15 +424,15 @@ export function ProjectAssistantPanel({
               maxLength={2000}
               disabled={busy}
               placeholder="Ask about deliverables, milestone statuses, agreement revisions, scope changes, payments, or pending reviews..."
-              className="mt-2 w-full rounded-xl border border-ink-200 bg-white p-3 text-sm font-normal text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="mt-2 w-full rounded-xl border border-ink-200 bg-white p-3 text-base font-normal text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
             />
           </label>
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-ink-500">
               Context refreshes from PayRoost records on every question.
             </span>
-            <Button type="submit" disabled={busy || question.trim().length < 2}>
+            <Button className="w-full sm:w-auto" type="submit" disabled={busy || question.trim().length < 2}>
               <Send className="mr-1.5 h-4 w-4" />
               {busy ? "Analyzing Project..." : "Ask Assistant"}
             </Button>

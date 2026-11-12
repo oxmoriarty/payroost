@@ -345,22 +345,22 @@ export function NotificationsCenter({
       </div>
 
       {/* Summary metrics */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-600">Unread</p>
-          <p className="mt-1 font-display text-2xl font-bold text-ink-950">{data.unreadCount}</p>
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        <Card className="p-3 sm:p-4">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-600 sm:text-xs">Unread</p>
+          <p className="mt-1 font-display text-xl font-bold text-ink-950 sm:text-2xl">{data.unreadCount}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+        <Card className="p-3 sm:p-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 sm:text-xs">
             Action required
           </p>
-          <p className="mt-1 font-display text-2xl font-bold text-amber-900">
+          <p className="mt-1 font-display text-xl font-bold text-amber-900 sm:text-2xl">
             {data.actionRequiredCount}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-600">Matching view</p>
-          <p className="mt-1 font-display text-2xl font-bold text-ink-950">{data.totalCount}</p>
+        <Card className="p-3 sm:p-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-ink-600 sm:text-xs">Matching view</p>
+          <p className="mt-1 font-display text-xl font-bold text-ink-950 sm:text-2xl">{data.totalCount}</p>
         </Card>
       </div>
 
@@ -372,7 +372,7 @@ export function NotificationsCenter({
               <button
                 aria-pressed={filter === opt.value}
                 className={cn(
-                  "rounded-xl px-3.5 py-2 text-xs font-semibold transition",
+                  "min-h-10 rounded-xl px-3.5 py-2 text-xs font-semibold transition sm:min-h-0",
                   filter === opt.value
                     ? "bg-teal-600 text-white"
                     : "border border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
@@ -387,12 +387,12 @@ export function NotificationsCenter({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs font-semibold text-ink-700">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold text-ink-700 sm:flex-row sm:items-center sm:gap-2">
               Category
               <select
                 aria-label="Filter notifications by category"
-                className="rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-900"
+                className="min-h-10 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-medium text-ink-900 sm:min-h-0 sm:w-auto sm:text-xs"
                 disabled={loading}
                 onChange={(e) =>
                   void loadPage({

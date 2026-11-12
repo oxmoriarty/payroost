@@ -616,7 +616,7 @@ export function ScopeChangePanel({
   }
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card className="space-y-6 p-4 sm:p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -645,7 +645,7 @@ export function ScopeChangePanel({
       )}
 
       {/* Composer & Preview Controls */}
-      <div className="space-y-3 rounded-xl border border-ink-100 bg-slate-50/70 p-4">
+      <div className="space-y-3 rounded-xl border border-ink-100 bg-slate-50/70 p-3.5 sm:p-4">
         <label className="block text-sm font-semibold text-ink-900">
           Describe Requested Scope Change
           <textarea
@@ -655,7 +655,7 @@ export function ScopeChangePanel({
             maxLength={10000}
             disabled={busy || !hasAgreementVersion}
             placeholder="Describe what should be added, modified, or removed, along with any target dates or constraints..."
-            className="mt-2 w-full rounded-xl border border-ink-200 bg-white p-3 text-sm font-normal text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+            className="mt-2 w-full rounded-xl border border-ink-200 bg-white p-3 text-base font-normal text-ink-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
           />
         </label>
 

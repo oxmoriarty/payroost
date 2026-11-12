@@ -541,7 +541,7 @@ export function AgreementEditor({
                 <label className="block text-sm font-semibold text-ink-800">
                   Item Title
                   <input
-                    className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                    className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                     onChange={(e) => setValue("scopeItems", updateScopeItem(draft.scopeItems, index, { title: e.target.value }))}
                     value={scope.title}
                   />
@@ -613,7 +613,7 @@ export function AgreementEditor({
                   <label className="text-sm font-semibold text-ink-800">
                     Milestone Title
                     <input
-                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                       onChange={(e) => setValue("milestones", updateMilestone(draft.milestones, index, { title: e.target.value }))}
                       value={milestone.title}
                     />
@@ -621,7 +621,7 @@ export function AgreementEditor({
                   <label className="text-sm font-semibold text-ink-800">
                     Amount (minor units) · {milestone.currency}
                     <input
-                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                       min="1"
                       onChange={(e) => setValue("milestones", updateMilestone(draft.milestones, index, { amountMinor: Math.max(1, Number(e.target.value)) }))}
                       type="number"
@@ -634,7 +634,7 @@ export function AgreementEditor({
                   <label className="text-sm font-semibold text-ink-800">
                     Due Date
                     <input
-                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                       onChange={(e) => setValue("milestones", updateMilestone(draft.milestones, index, { dueDate: e.target.value || null }))}
                       type="date"
                       value={milestone.dueDate ?? ""}
@@ -643,7 +643,7 @@ export function AgreementEditor({
                   <label className="text-sm font-semibold text-ink-800">
                     Description
                     <input
-                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                      className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                       onChange={(e) => setValue("milestones", updateMilestone(draft.milestones, index, { description: e.target.value }))}
                       value={milestone.description}
                     />
@@ -656,9 +656,10 @@ export function AgreementEditor({
 
         {notice && <Notice message={notice} />}
 
-        <div className="mt-7 flex flex-wrap gap-3">
-          <Button disabled={busy} onClick={save}>Save draft</Button>
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <Button className="w-full sm:w-auto" disabled={busy} onClick={save}>Save draft</Button>
           <Button
+            className="w-full sm:w-auto"
             disabled={busy || !isClientVerified}
             onClick={sendForReview}
             variant="secondary"
@@ -820,7 +821,7 @@ function TextArea({ label, value, onChange }: { label: string; value: string; on
     <label className="block text-sm font-semibold text-ink-800">
       {label}
       <textarea
-        className="mt-2 min-h-24 w-full rounded-xl border border-ink-200 p-3 font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+        className="mt-2 min-h-24 w-full rounded-xl border border-ink-200 p-3 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />

@@ -230,7 +230,7 @@ export function ClientPortalEntryView({
                 autoComplete="one-time-code"
                 autoFocus
                 disabled={step === "verifying"}
-                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.5em] text-ink-950 shadow-sm focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20 disabled:bg-slate-100"
+                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-center font-mono text-xl font-bold tracking-[0.25em] text-ink-950 shadow-sm focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20 disabled:bg-slate-100 sm:text-2xl sm:tracking-[0.5em]"
               />
               {remainingAttempts !== null && remainingAttempts > 0 && (
                 <p className="mt-1.5 text-xs text-ink-500 text-center">

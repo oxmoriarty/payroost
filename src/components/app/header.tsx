@@ -313,7 +313,7 @@ export function AppHeader({
             {notificationsOpen && (
               <div
                 aria-label="Workspace notifications"
-                className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2.5rem)] rounded-2xl border border-ink-200 bg-white p-4 shadow-xl sm:w-[26rem]"
+                className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white p-4 shadow-xl sm:w-[26rem]"
                 role="dialog"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
@@ -481,7 +481,7 @@ export function AppHeader({
             className="fixed inset-0 bg-ink-950/60 backdrop-blur-sm"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div className="relative z-10 flex w-72 max-w-[82vw] flex-col bg-ink-950 px-5 py-6 text-white shadow-2xl">
+          <div className="relative z-10 flex h-[100dvh] w-72 max-w-[82vw] flex-col overflow-y-auto bg-ink-950 px-5 py-6 text-white shadow-2xl">
             <div className="flex items-center justify-between">
               <Link
                 className="inline-flex items-center"
@@ -492,22 +492,22 @@ export function AppHeader({
               </Link>
               <button
                 aria-label="Close navigation"
-                className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white"
+                className="rounded-lg p-2 text-slate-300 hover:bg-white/10 hover:text-white"
                 onClick={() => setMobileNavOpen(false)}
                 type="button"
               >
                 <X size={20} />
               </button>
             </div>
-            <p className="mt-6 text-xs text-slate-400">Signed in as {userLabel}</p>
-            <nav aria-label="Mobile workspace navigation" className="mt-4 space-y-1">
+            <p className="mt-6 truncate text-xs text-slate-400">Signed in as {userLabel}</p>
+            <nav aria-label="Mobile workspace navigation" className="mt-4 space-y-1.5">
               {APP_NAV_LINKS.map(({ label, href, icon: Icon, exact }) => {
                 const active = isNavLinkActive(pathname, href, exact);
                 return (
                   <Link
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                      "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
                       active
                         ? "bg-teal-600/20 text-white ring-1 ring-inset ring-teal-400/30"
                         : "text-slate-300 hover:bg-white/8 hover:text-white",

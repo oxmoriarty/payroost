@@ -41,7 +41,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f5f0] lg:flex">
+    <div className="min-h-[100dvh] overflow-x-clip bg-[#f6f5f0] lg:flex">
       <Sidebar />
       <div className="min-w-0 flex-1">
         <AppHeader
@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           userEmail={chrome.userEmail}
           userLabel={chrome.userLabel}
         />
-        <main className="mx-auto max-w-7xl px-5 py-7 sm:px-8 sm:py-10">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 py-5 sm:px-8 sm:py-10">{children}</main>
       </div>
     </div>
   );

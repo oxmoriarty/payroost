@@ -142,7 +142,7 @@ export function PublicReviewView({
             Prepared by <strong>{reviewData.freelancer_name}</strong> for <strong>{reviewData.client_name}</strong>
           </p>
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           <Badge tone="info">Version {reviewData.version_number}</Badge>
           <p className="mt-1 text-xs text-ink-500">Expires {new Date(reviewData.expires_at).toLocaleDateString()}</p>
         </div>
@@ -156,19 +156,19 @@ export function PublicReviewView({
       )}
 
       {/* Scope, Deliverables, Acceptance Criteria, and Terms */}
-      <Card className="p-6 sm:p-8">
+      <Card className="p-4 sm:p-8">
         <AgreementDocumentView content={content} />
       </Card>
 
       {/* Decision Section with OTP Challenge Flow */}
-      <Card className="p-6 sm:p-8 bg-slate-50/70 border-2 border-slate-200">
+      <Card className="border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-8">
         <h2 className="font-display text-2xl text-ink-950">Review Decision</h2>
         <p className="mt-2 text-sm text-ink-700">
           Decisions are legally attributed to your verified email address and require confirmation with a single-use security code.
         </p>
 
         {decisionStep === "otp-prompt" ? (
-          <form onSubmit={submitDecisionWithOtp} className="mt-6 rounded-2xl border border-teal-200 bg-white p-6 shadow-sm space-y-4">
+          <form onSubmit={submitDecisionWithOtp} className="mt-6 space-y-4 rounded-2xl border border-teal-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center gap-3 text-teal-800">
               <KeyRound className="h-6 w-6 text-teal-700 shrink-0" />
               <div>
@@ -185,6 +185,8 @@ export function PublicReviewView({
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
                 pattern="[0-9]{6}"
                 maxLength={6}
                 required
@@ -192,7 +194,7 @@ export function PublicReviewView({
                 placeholder="000000"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
-                className="w-full text-center text-3xl font-mono tracking-[0.3em] font-bold p-3 rounded-xl border border-ink-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 outline-none"
+                className="w-full rounded-xl border border-ink-300 p-3 text-center font-mono text-2xl font-bold tracking-[0.2em] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 sm:text-3xl sm:tracking-[0.3em]"
               />
             </div>
 
@@ -200,15 +202,15 @@ export function PublicReviewView({
               <button
                 type="button"
                 onClick={() => setDecisionStep("idle")}
-                className="text-xs font-semibold text-ink-600 hover:text-ink-900"
+                className="min-h-9 px-2 text-xs font-semibold text-ink-600 hover:text-ink-900"
               >
                 Cancel
               </button>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="secondary"
-                  className="min-h-9 px-3 text-xs"
+                  className="min-h-10 px-3 text-xs sm:min-h-9"
                   onClick={() => selectedAction && startDecision(selectedAction)}
                 >
                   Resend code
@@ -226,18 +228,18 @@ export function PublicReviewView({
                 Feedback or Requested Changes (Optional for approval, required for change request)
               </label>
               <textarea
-                className="w-full min-h-24 rounded-xl border border-ink-200 bg-white p-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="min-h-24 w-full rounded-xl border border-ink-200 bg-white p-3 text-base outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                 placeholder="If you need adjustments to dates, deliverables, or payment milestones, describe them here."
                 value={changeNote}
                 onChange={(e) => setChangeNote(e.target.value)}
               />
             </div>
 
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
               <Button
                 onClick={() => startDecision("APPROVE")}
                 disabled={decisionStep === "requesting-otp"}
-                className="bg-teal-700 hover:bg-teal-600"
+                className="w-full bg-teal-700 hover:bg-teal-600 sm:w-auto"
               >
                 {decisionStep === "requesting-otp" && selectedAction === "APPROVE" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -250,6 +252,7 @@ export function PublicReviewView({
                 onClick={() => startDecision("REQUEST_CHANGES")}
                 disabled={decisionStep === "requesting-otp"}
                 variant="secondary"
+                className="w-full sm:w-auto"
               >
                 {decisionStep === "requesting-otp" && selectedAction === "REQUEST_CHANGES" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

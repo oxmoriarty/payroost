@@ -133,7 +133,7 @@ export function ProfileSettingsCard({
             <label className="block text-sm font-semibold text-ink-800">
               Display name
               <input
-                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm font-normal text-ink-950 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-base font-normal text-ink-950 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                 maxLength={80}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your full name or studio"
@@ -145,7 +145,7 @@ export function ProfileSettingsCard({
             <label className="block text-sm font-semibold text-ink-800">
               Country code (optional)
               <input
-                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm font-normal uppercase text-ink-950 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-base font-normal uppercase text-ink-950 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
                 maxLength={2}
                 onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
                 placeholder="US"
@@ -169,7 +169,7 @@ export function ProfileSettingsCard({
           )}
 
           <div className="flex justify-end">
-            <Button disabled={saving} type="submit">
+            <Button className="w-full sm:w-auto" disabled={saving} type="submit">
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

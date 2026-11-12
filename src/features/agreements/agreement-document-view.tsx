@@ -202,22 +202,22 @@ export function AgreementDocumentView({
       {milestones.length > 0 && (
         <div>
           <h3 className="font-display text-lg text-ink-950">Agreed Milestone Schedule</h3>
-          <div className="mt-3 overflow-x-auto rounded-xl border border-ink-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-ink-50/70">
+          <div className="mt-3 rounded-xl border border-ink-200 sm:overflow-x-auto">
+            <table className="block w-full text-left text-sm sm:table">
+              <thead className="hidden bg-ink-50/70 sm:table-header-group">
                 <tr className="border-b border-ink-200 text-xs font-bold uppercase tracking-wider text-ink-600">
                   <th className="px-4 py-2.5">Milestone &amp; Deliverables</th>
                   <th className="px-4 py-2.5">Due date</th>
                   <th className="px-4 py-2.5 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-ink-100 bg-white">
+              <tbody className="block divide-y divide-ink-100 bg-white sm:table-row-group">
                 {milestones.map((m, idx) => {
                   const deliverables = toStringList(m.deliverables);
                   const criteria = toStringList(m.acceptanceCriteria);
                   return (
-                    <tr key={m.id || idx}>
-                      <td className="px-4 py-3 align-top">
+                    <tr className="flex flex-col gap-1.5 px-3.5 py-3 sm:table-row sm:p-0" key={m.id || idx}>
+                      <td className="block p-0 sm:table-cell sm:px-4 sm:py-3 sm:align-top">
                         <p className="font-semibold text-ink-950">{m.title}</p>
                         {m.description && (
                           <p className="mt-0.5 text-xs text-ink-700">{m.description}</p>
@@ -233,22 +233,24 @@ export function AgreementDocumentView({
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3 align-top text-xs text-ink-700 whitespace-nowrap">
+                      <td className="block p-0 text-xs text-ink-700 sm:table-cell sm:px-4 sm:py-3 sm:align-top sm:whitespace-nowrap">
+                        <span className="font-semibold text-ink-600 sm:hidden">Due date: </span>
                         {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : "Flexible"}
                       </td>
-                      <td className="px-4 py-3 align-top text-right font-semibold text-ink-950 whitespace-nowrap">
+                      <td className="block p-0 text-left font-semibold text-ink-950 sm:table-cell sm:px-4 sm:py-3 sm:text-right sm:align-top sm:whitespace-nowrap">
+                        <span className="text-xs font-medium text-ink-600 sm:hidden">Amount: </span>
                         {formatMoney(m.amountMinor, m.currency)}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-              <tfoot className="border-t border-ink-200 bg-ink-50/50">
-                <tr>
-                  <td className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-ink-700" colSpan={2}>
+              <tfoot className="block border-t border-ink-200 bg-ink-50/50 sm:table-footer-group">
+                <tr className="flex items-center justify-between px-3.5 py-2.5 sm:table-row sm:p-0">
+                  <td className="block p-0 text-xs font-bold uppercase tracking-wider text-ink-700 sm:table-cell sm:px-4 sm:py-2.5" colSpan={2}>
                     Total Scheduled Milestones
                   </td>
-                  <td className="px-4 py-2.5 text-right font-bold text-ink-950">
+                  <td className="block p-0 text-right font-bold text-ink-950 sm:table-cell sm:px-4 sm:py-2.5">
                     {formatMoney(totalMinor, primaryCurrency)}
                   </td>
                 </tr>

@@ -51,18 +51,18 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Overview</p>
-          <h1 className="mt-2 font-display text-4xl text-ink-950">Your project ledger.</h1>
-          <p className="mt-2 max-w-2xl text-ink-700">
+          <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">Your project ledger.</h1>
+          <p className="mt-2 max-w-2xl text-sm text-ink-700 sm:text-base">
             Track client verification, agreement revisions, deliverable submissions, and scope requests across every project.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {!dashboard.isConfigured && <Badge tone="warning">Supabase unconfigured</Badge>}
-          <Link href="/app/projects/new">
-            <Button>
+          <Link className="w-full sm:w-auto" href="/app/projects/new">
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2" size={16} />
               New project
             </Button>
@@ -70,19 +70,19 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <Card className="p-5" key={metric.label}>
-            <p className="text-sm font-semibold text-ink-700">{metric.label}</p>
-            <p className="mt-4 font-display text-4xl text-ink-950">{metric.value}</p>
-            <p className="mt-1 text-sm text-ink-700">{metric.detail}</p>
+          <Card className="p-4 sm:p-5" key={metric.label}>
+            <p className="text-xs font-semibold text-ink-700 sm:text-sm">{metric.label}</p>
+            <p className="mt-2 font-display text-3xl text-ink-950 sm:mt-4 sm:text-4xl">{metric.value}</p>
+            <p className="mt-1 text-xs text-ink-700 sm:text-sm">{metric.detail}</p>
           </Card>
         ))}
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+      <div className="mt-6 grid gap-6 sm:mt-8 xl:grid-cols-[1.45fr_0.95fr]">
         <div className="space-y-6">
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl text-ink-950">Needs attention</h2>

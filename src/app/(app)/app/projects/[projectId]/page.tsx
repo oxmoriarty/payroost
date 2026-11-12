@@ -192,7 +192,7 @@ export default async function ProjectWorkspacePage({
 
       {/* Project Workflow Progress & Brief Summary */}
       <Card className="p-5 sm:p-6 space-y-5">
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {workflowSteps.map((step, idx) => (
             <div
               className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${

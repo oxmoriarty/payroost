@@ -465,7 +465,7 @@ export function MilestonePlanner({
             Optional planning guidance
             <input
               aria-label="Planning goal"
-              className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="mt-1.5 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm"
               onChange={(e) => setPlanningGoal(e.target.value)}
               placeholder="e.g., Separate backend API delivery from frontend UI polish and QA"
               value={planningGoal}
@@ -597,7 +597,7 @@ export function MilestonePlanner({
                     <label className="text-xs font-semibold text-ink-800">
                       Milestone Title
                       <input
-                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         onChange={(e) =>
                           updateSingleMilestone(index, { title: e.target.value })
                         }
@@ -608,7 +608,7 @@ export function MilestonePlanner({
                     <label className="text-xs font-semibold text-ink-800">
                       Proposed Amount (minor units) · {milestone.currency ?? projectCurrency}
                       <input
-                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         min={1}
                         onChange={(e) => {
                           const raw = e.target.value.trim();
@@ -635,7 +635,7 @@ export function MilestonePlanner({
                     <label className="text-xs font-semibold text-ink-800">
                       Estimated Duration
                       <input
-                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         onChange={(e) =>
                           updateSingleMilestone(index, {
                             estimatedDuration: e.target.value.trim() || null,
@@ -649,7 +649,7 @@ export function MilestonePlanner({
                     <label className="text-xs font-semibold text-ink-800">
                       Target Due Date (optional)
                       <input
-                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 block w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         onChange={(e) =>
                           updateSingleMilestone(index, {
                             dueDate: e.target.value || null,
@@ -664,7 +664,7 @@ export function MilestonePlanner({
                   <label className="block text-xs font-semibold text-ink-800">
                     Description
                     <textarea
-                      className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-sm font-normal outline-none focus:border-teal-600"
+                      className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                       onChange={(e) =>
                         updateSingleMilestone(index, { description: e.target.value })
                       }
@@ -676,7 +676,7 @@ export function MilestonePlanner({
                     <label className="block text-xs font-semibold text-ink-800">
                       Deliverables (one per line)
                       <textarea
-                        className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         onChange={(e) =>
                           updateSingleMilestone(index, {
                             deliverables: linesToArray(e.target.value),
@@ -689,7 +689,7 @@ export function MilestonePlanner({
                     <label className="block text-xs font-semibold text-ink-800">
                       Acceptance Criteria (one per line)
                       <textarea
-                        className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-sm font-normal outline-none focus:border-teal-600"
+                        className="mt-1 min-h-20 w-full rounded-xl border border-ink-200 bg-white p-2.5 text-base font-normal outline-none focus:border-teal-600 sm:text-sm"
                         onChange={(e) =>
                           updateSingleMilestone(index, {
                             acceptanceCriteria: linesToArray(e.target.value),
