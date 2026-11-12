@@ -1,19 +1,37 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import nodemailer from "nodemailer";
 import { renderPortalOtpEmail, renderPortalInvitationEmail } from "./templates";
-import { sendPortalOtpEmail, sendPortalInvitationEmail, emailDeliveryLog } from "./provider";
+import {
+  sendPortalOtpEmail,
+  sendPortalInvitationEmail,
+  emailDeliveryLog,
+  isEmailConfigured,
+  getSenderEmail,
+} from "./provider";
+
+function clearEmailEnv(): void {
+  delete process.env.EMAIL_PROVIDER;
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_PORT;
+  delete process.env.SMTP_SECURE;
+  delete process.env.SMTP_USER;
+  delete process.env.SMTP_PASS;
+  delete process.env.PAYROOST_EMAIL_FROM;
+  delete process.env.RESEND_API_KEY;
+}
 
 
 describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     emailDeliveryLog.length = 0;
-    delete process.env.RESEND_API_KEY;
+    clearEmailEnv();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     emailDeliveryLog.length = 0;
-    delete process.env.RESEND_API_KEY;
+    clearEmailEnv();
   });
 
   // ==========================================================================
@@ -267,6 +285,152 @@ describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
         to: "client@example.com",
         subject: 'Access your client portal for "Project" on Payroost',
       });
+    });
+  });
+
+  // ==========================================================================
+  // Gmail SMTP Delivery & Dual-Provider Resolution
+  // ==========================================================================
+  describe("Gmail SMTP & Provider Resolution", () => {
+    it("dispatches via Gmail SMTP defaults when SMTP_USER and SMTP_PASS are set", async () => {
+      process.env.SMTP_USER = "freelancer@gmail.com";
+      process.env.SMTP_PASS = "abcd efgh ijkl mnop";
+
+      const sendMailMock = vi.fn().mockResolvedValue({ messageId: "<smtp-msg-1@gmail.com>" });
+      const createTransportSpy = vi.spyOn(nodemailer, "createTransport").mockReturnValue({
+        sendMail: sendMailMock,
+      } as never);
+
+      expect(isEmailConfigured()).toBe(true);
+      expect(getSenderEmail()).toBe("Payroost <freelancer@gmail.com>");
+
+      const result = await sendPortalOtpEmail({
+        clientEmail: "client@anydomain.com",
+        projectTitle: "Website Build",
+        otpCode: "654321",
+        expiresInMinutes: 15,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBe("<smtp-msg-1@gmail.com>");
+      expect(createTransportSpy).toHaveBeenCalledWith({
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        auth: {
+          user: "freelancer@gmail.com",
+          pass: "abcdefghijklmnop",
+        },
+      });
+      expect(sendMailMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: "Payroost <freelancer@gmail.com>",
+          to: "client@anydomain.com",
+        })
+      );
+      expect(emailDeliveryLog).toHaveLength(0);
+    });
+
+    it("supports custom SMTP_HOST, SMTP_PORT, SMTP_SECURE, and PAYROOST_EMAIL_FROM", async () => {
+      process.env.SMTP_HOST = "smtp.custommail.test";
+      process.env.SMTP_PORT = "587";
+      process.env.SMTP_SECURE = "false";
+      process.env.SMTP_USER = "notify@custommail.test";
+      process.env.SMTP_PASS = "pass with spaces";
+      process.env.PAYROOST_EMAIL_FROM = "Payroost Billing <billing@custommail.test>";
+
+      const sendMailMock = vi.fn().mockResolvedValue({ messageId: "<custom-1>" });
+      const createTransportSpy = vi.spyOn(nodemailer, "createTransport").mockReturnValue({
+        sendMail: sendMailMock,
+      } as never);
+
+      const result = await sendPortalInvitationEmail({
+        clientEmail: "client@example.com",
+        projectTitle: "Retainer",
+        portalUrl: "https://payroost.dev/portal/abc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(createTransportSpy).toHaveBeenCalledWith({
+        host: "smtp.custommail.test",
+        port: 587,
+        secure: false,
+        auth: {
+          user: "notify@custommail.test",
+          pass: "pass with spaces",
+        },
+      });
+      expect(sendMailMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: "Payroost Billing <billing@custommail.test>",
+          to: "client@example.com",
+        })
+      );
+    });
+
+    it("returns misconfigured error when SMTP_USER is set without SMTP_PASS", async () => {
+      process.env.SMTP_USER = "freelancer@gmail.com";
+
+      expect(isEmailConfigured()).toBe(false);
+
+      const result = await sendPortalOtpEmail({
+        clientEmail: "client@example.com",
+        projectTitle: "Project",
+        otpCode: "123456",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("EMAIL_PROVIDER_MISCONFIGURED");
+    });
+
+    it("respects explicit EMAIL_PROVIDER=resend even when SMTP vars are configured", async () => {
+      process.env.EMAIL_PROVIDER = "resend";
+      process.env.SMTP_USER = "freelancer@gmail.com";
+      process.env.SMTP_PASS = "abcdefghijklmnop";
+      process.env.RESEND_API_KEY = "re_explicit_resend_key";
+
+      const createTransportSpy = vi.spyOn(nodemailer, "createTransport");
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "resend_msg_456" }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const result = await sendPortalOtpEmail({
+        clientEmail: "client@example.com",
+        projectTitle: "Project",
+        otpCode: "123456",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBe("resend_msg_456");
+      expect(createTransportSpy).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("redacts SMTP_PASS from error messages on authentication or transport failure", async () => {
+      process.env.SMTP_USER = "freelancer@gmail.com";
+      process.env.SMTP_PASS = "abcd efgh ijkl mnop";
+
+      const sendMailMock = vi
+        .fn()
+        .mockRejectedValue(
+          new Error("Invalid login using abcd efgh ijkl mnop / abcdefghijklmnop for user")
+        );
+      vi.spyOn(nodemailer, "createTransport").mockReturnValue({
+        sendMail: sendMailMock,
+      } as never);
+
+      const result = await sendPortalOtpEmail({
+        clientEmail: "client@example.com",
+        projectTitle: "Project",
+        otpCode: "123456",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("EMAIL_SEND_FAILED");
+      expect(result.error).not.toContain("abcdefghijklmnop");
+      expect(result.error).not.toContain("abcd efgh ijkl mnop");
     });
   });
 });
