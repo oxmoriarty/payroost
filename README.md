@@ -124,7 +124,7 @@ PayRoost bridges the gap between independent professionals and clients by turnin
 
 ### Database Setup & Migrations
 
-PayRoost uses `34` sequential SQL migrations located in `supabase/migrations/` (`202611020001_initial_identity.sql` through `202611120001_notifications_and_project_history.sql`):
+PayRoost uses `35` sequential SQL migrations located in `supabase/migrations/` (`202611020001_initial_identity.sql` through `202611120002_restore_postgrest_table_and_rpc_grants.sql`):
 
 ```bash
 # Inspect remote vs local migration state
@@ -161,7 +161,7 @@ For deploying/testing against live Supabase, Resend, Gemini, and PayPal Sandbox 
 PayRoost includes an extensive automated test suite covering unit tests, route handlers, UI workflows, session/secret security, and database invariant contracts.
 
 ```bash
-# 1. Run all 1,212 tests across 95 suites
+# 1. Run all 1,221 tests across 97 suites
 npm test
 
 # 2. Run TypeScript compiler diagnostics
@@ -213,7 +213,7 @@ payroost/
 │       ├── security/             # Canonical app URL, CSRF, HMAC tokens, rate limiters & client IP
 │       └── supabase/             # Server, browser, middleware & service-role DB factories
 ├── supabase/
-│   └── migrations/               # 34 sequential PostgreSQL migrations
+│   └── migrations/               # 35 sequential PostgreSQL migrations
 ├── live-sandbox-integration-checklist.md # Live Supabase/Resend/Gemini/PayPal Sandbox runbook
 ├── LICENSE                       # MIT Open Source License
 └── README.md                     # Repository documentation & setup guide

@@ -54,7 +54,7 @@ Populate `.env.local` (for local development) or your deployment provider's encr
   ```bash
   supabase migration list
   ```
-- [ ] Confirm all `34` migrations (`202611020001_initial_identity.sql` through `202611120001_notifications_and_project_history.sql`) — especially `202611110003_paypal_platform_webhooks.sql`, `202611110004_postgrest_capture_and_webhook_alignment.sql`, and `202611120001_notifications_and_project_history.sql` — are applied via `supabase db push` or your controlled migration pipeline.
+- [ ] Confirm all `35` migrations (`202611020001_initial_identity.sql` through `202611120002_restore_postgrest_table_and_rpc_grants.sql`) — especially `202611110003_paypal_platform_webhooks.sql`, `202611110004_postgrest_capture_and_webhook_alignment.sql`, `202611120001_notifications_and_project_history.sql`, and `202611120002_restore_postgrest_table_and_rpc_grants.sql` — are applied via `supabase db push` or your controlled migration pipeline.
 - [ ] Verify Supabase Auth redirect URLs in the Supabase Dashboard include:
   - `<PAYROOST_APP_URL>/login`
   - `<PAYROOST_APP_URL>/app`
