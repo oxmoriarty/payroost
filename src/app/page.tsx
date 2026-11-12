@@ -53,10 +53,10 @@ export default function LandingPage() {
               Ready for new projects
             </span>
             <Link
-              className="group inline-flex items-center gap-2.5 rounded-full bg-ink-950 py-1.5 pl-4 pr-1.5 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-ink-900 active:translate-y-0 active:scale-[0.985] sm:text-sm"
+              className="group inline-flex items-center gap-2.5 rounded-full bg-ink-950 py-1.5 pl-4 pr-1.5 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-ink-900 hover:text-white active:translate-y-0 active:scale-[0.985] sm:text-sm"
               href="/signup"
             >
-              <span>Create workspace</span>
+              <span className="text-white">Create workspace</span>
               <span className="grid size-7 place-items-center rounded-full bg-white text-ink-950 transition-transform duration-200 group-hover:translate-x-0.5">
                 <ArrowRight size={14} aria-hidden="true" />
               </span>
