@@ -51,14 +51,14 @@ export default async function PaymentOperationsPage() {
 
       {/* Summary KPI Cards */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 lg:grid-cols-4">
-        <Card className="p-4 sm:p-5">
+        <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200">
           <p className="text-xs font-semibold text-ink-700 sm:text-sm">Total Intents</p>
           <p className="mt-2 font-display text-2xl text-ink-950 sm:mt-3 sm:text-3xl">{summary.totalRecords}</p>
           <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">
             Platform: {summary.platformCount ?? 0} • Merchant: {summary.merchantCount ?? 0}
           </p>
         </Card>
-        <Card className="p-4 sm:p-5">
+        <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200">
           <p className="text-xs font-semibold text-ink-700 sm:text-sm">Confirmed Captures</p>
           <p className="mt-2 font-display text-2xl text-emerald-700 sm:mt-3 sm:text-3xl">
             {summary.confirmedCaptures}
@@ -67,7 +67,7 @@ export default async function PaymentOperationsPage() {
             Volume: {formatMoney(summary.totalVolumeCents, "USD")}
           </p>
         </Card>
-        <Card className="p-4 sm:p-5">
+        <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200">
           <p className="text-xs font-semibold text-ink-700 sm:text-sm">Needs Reconciliation</p>
           <p
             className={`mt-2 font-display text-2xl sm:mt-3 sm:text-3xl ${
@@ -81,7 +81,7 @@ export default async function PaymentOperationsPage() {
             {summary.exhaustedWebhooks ?? 0}
           </p>
         </Card>
-        <Card className="p-4 sm:p-5">
+        <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200">
           <p className="text-xs font-semibold text-ink-700 sm:text-sm">In-Flight / Pending</p>
           <p className="mt-2 font-display text-2xl text-amber-600 sm:mt-3 sm:text-3xl">{summary.inFlight}</p>
           <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">Active checkout or capture</p>

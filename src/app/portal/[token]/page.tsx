@@ -536,23 +536,25 @@ export default async function ClientPortalPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <PublicBrandHeader subtitle="Verified Client Portal" />
-      <ClientPortalWorkspaceView
-        token={token}
-        projectData={projectData}
-        csrfToken={authResult.csrfSecret}
-        initialPaymentReturn={initialPaymentReturn}
-      />
+      <div className="pr-page-enter">
+        <ClientPortalWorkspaceView
+          token={token}
+          projectData={projectData}
+          csrfToken={authResult.csrfSecret}
+          initialPaymentReturn={initialPaymentReturn}
+        />
+      </div>
     </div>
   );
 }
 
 function renderUnavailablePortal(message: string) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
+    <div className="pr-page-enter flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
       <Link className="mb-6 inline-flex items-center" href="/">
         <Brand size="sm" />
       </Link>
-      <Card className="w-full max-w-md p-8 text-center">
+      <Card className="pr-interactive-card w-full max-w-md p-8 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
           <AlertCircle className="h-7 w-7" />
         </div>

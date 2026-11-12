@@ -24,7 +24,7 @@ export function Brand({
   const effectiveSize = size ?? (compact ? "sm" : "md");
 
   return (
-    <span className={cn("inline-flex shrink-0 items-center", className)}>
+    <span className={cn("inline-flex shrink-0 items-center transition-transform duration-200 ease-out hover:scale-[1.015] active:scale-[0.99]", className)}>
       <Image
         alt="Payroost"
         className={cn("shrink-0 select-none object-contain", BRAND_SIZE_CLASSES[effectiveSize])}

@@ -22,11 +22,11 @@ export default async function PublicReviewPage({
 
   if (error || !data || (data as unknown[]).length !== 1) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
+      <div className="pr-page-enter flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
         <Link className="mb-6 inline-flex items-center" href="/">
           <Brand size="sm" />
         </Link>
-        <Card className="max-w-md w-full p-8 text-center">
+        <Card className="pr-interactive-card max-w-md w-full p-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
             <AlertCircle className="h-7 w-7" />
           </div>
@@ -49,7 +49,9 @@ export default async function PublicReviewPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <PublicBrandHeader maxWidthClass="max-w-4xl" subtitle="Agreement Review" />
-      <PublicReviewView token={token} reviewData={reviewRow} />
+      <div className="pr-page-enter">
+        <PublicReviewView token={token} reviewData={reviewRow} />
+      </div>
     </div>
   );
 }

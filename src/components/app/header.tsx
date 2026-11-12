@@ -293,15 +293,15 @@ export function AppHeader({
             <button
               aria-expanded={notificationsOpen}
               aria-label={`Notifications (${badgeCount})`}
-              className="relative rounded-xl p-2.5 text-ink-700 transition hover:bg-ink-100"
+              className="group relative rounded-xl p-2.5 text-ink-700 transition-all duration-200 hover:bg-ink-100 active:scale-95"
               onClick={() => setNotificationsOpen((prev) => !prev)}
               type="button"
             >
-              <Bell size={18} />
+              <Bell className="transition-transform duration-200 group-hover:rotate-6" size={18} />
               {badgeCount > 0 && (
                 <span
                   className={cn(
-                    "absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white",
+                    "absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white transition-transform duration-200 group-hover:scale-110",
                     isWarningBadge ? "bg-amber-600" : "bg-teal-600",
                   )}
                 >
@@ -313,7 +313,7 @@ export function AppHeader({
             {notificationsOpen && (
               <div
                 aria-label="Workspace notifications"
-                className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white p-4 shadow-xl sm:w-[26rem]"
+                className="pr-page-enter absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white p-4 shadow-xl sm:w-[26rem]"
                 role="dialog"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">

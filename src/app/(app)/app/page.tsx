@@ -72,7 +72,7 @@ export default async function DashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <Card className="p-4 sm:p-5" key={metric.label}>
+          <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200" key={metric.label}>
             <p className="text-xs font-semibold text-ink-700 sm:text-sm">{metric.label}</p>
             <p className="mt-2 font-display text-3xl text-ink-950 sm:mt-4 sm:text-4xl">{metric.value}</p>
             <p className="mt-1 text-xs text-ink-700 sm:text-sm">{metric.detail}</p>
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
                 {dashboard.needsAttention.map((item) => (
                   <li key={item.id}>
                     <Link
-                      className="flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4 transition hover:border-teal-600/40 hover:bg-teal-50/30"
+                      className="group flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-600/40 hover:bg-teal-50/30 hover:shadow-sm"
                       href={item.href}
                     >
                       {item.tone === "warning" ? (
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
                         </div>
                         <p className="mt-1 text-sm text-ink-800">{item.description}</p>
                       </div>
-                      <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-ink-500" />
+                      <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-ink-500 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-teal-700" />
                     </Link>
                   </li>
                 ))}

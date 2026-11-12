@@ -6,8 +6,8 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   const { error } = await searchParams;
   return (
     <div className="mx-auto max-w-3xl">
-      <Link className="inline-flex items-center text-sm font-bold text-teal-700 hover:text-teal-600" href="/app/projects">
-        <ArrowLeft className="mr-2" size={16} />Projects
+      <Link className="group inline-flex items-center text-sm font-bold text-teal-700 transition-colors hover:text-teal-600" href="/app/projects">
+        <ArrowLeft className="mr-2 transition-transform duration-200 group-hover:-translate-x-0.5" size={16} />Projects
       </Link>
       <p className="mt-7 text-sm font-bold uppercase tracking-[0.14em] text-teal-700">New project</p>
       <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">Give the work a clear beginning.</h1>

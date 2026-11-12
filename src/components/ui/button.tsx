@@ -16,7 +16,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", type = "button", ...props }, ref) => (
     <button
       className={cn(
-        "inline-flex min-h-10 touch-manipulation items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "group inline-flex min-h-10 touch-manipulation items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-sm active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100",
         styles[variant],
         className,
       )}

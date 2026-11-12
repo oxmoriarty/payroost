@@ -21,15 +21,19 @@ export function Sidebar() {
             <Link
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out active:scale-[0.985]",
                 active
-                  ? "bg-teal-600/20 text-white ring-1 ring-inset ring-teal-400/30"
-                  : "text-slate-300 hover:bg-white/8 hover:text-white",
+                  ? "bg-teal-600/20 text-white ring-1 ring-inset ring-teal-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                  : "text-slate-300 hover:translate-x-0.5 hover:bg-white/8 hover:text-white",
               )}
               href={href}
               key={href}
             >
-              <Icon aria-hidden="true" size={18} />
+              <Icon
+                aria-hidden="true"
+                className="transition-transform duration-200 group-hover:scale-110"
+                size={18}
+              />
               {label}
             </Link>
           );

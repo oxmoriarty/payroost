@@ -63,8 +63,8 @@ export function VerifyEmailClient({ token }: VerifyEmailClientProps) {
   // Error state (invalid token or expired/already used)
   if (status === "error") {
     return (
-      <div className="flex-1 bg-slate-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center">
+      <div className="pr-page-enter flex-1 bg-slate-50 flex items-center justify-center p-4">
+        <Card className="pr-interactive-card max-w-md w-full p-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
             <AlertTriangle className="h-7 w-7" />
           </div>
@@ -88,8 +88,8 @@ export function VerifyEmailClient({ token }: VerifyEmailClientProps) {
   // Success state (explicitly confirmed by client via POST)
   if (status === "success" && verifiedData) {
     return (
-      <div className="flex-1 bg-slate-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center">
+      <div className="pr-page-enter flex-1 bg-slate-50 flex items-center justify-center p-4">
+        <Card className="pr-interactive-card max-w-md w-full p-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-teal-700">
             <CheckCircle2 className="h-7 w-7" />
           </div>
@@ -120,8 +120,8 @@ export function VerifyEmailClient({ token }: VerifyEmailClientProps) {
 
   // Initial prompt: requires explicit human confirmation (GET prefetch scanners cannot trigger this)
   return (
-    <div className="flex-1 bg-slate-50 flex items-center justify-center p-4">
-      <Card className="max-w-md w-full p-8 text-center">
+    <div className="pr-page-enter flex-1 bg-slate-50 flex items-center justify-center p-4">
+      <Card className="pr-interactive-card max-w-md w-full p-8 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-600 border border-teal-100">
           <MailCheck className="h-7 w-7" />
         </div>

@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           userEmail={chrome.userEmail}
           userLabel={chrome.userLabel}
         />
-        <main className="mx-auto max-w-7xl px-4 py-5 sm:px-8 sm:py-10">{children}</main>
+        <main className="pr-page-enter mx-auto max-w-7xl px-4 py-5 sm:px-8 sm:py-10">{children}</main>
       </div>
     </div>
   );
