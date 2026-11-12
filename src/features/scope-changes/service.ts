@@ -662,7 +662,7 @@ export async function analyzeScopeChange(
 
     const result = await provider.generateStructured(prompt, aiRawScopeChangeOutputSchema, {
       systemInstruction: SCOPE_CHANGE_SYSTEM_INSTRUCTION,
-      timeoutMs: options.timeoutMs ?? 30_000,
+      timeoutMs: options.timeoutMs ?? 48_000,
       signal: options.signal,
       temperature: 0.2,
     });

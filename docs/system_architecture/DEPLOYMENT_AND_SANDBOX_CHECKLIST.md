@@ -11,9 +11,12 @@ Copy `.env.example` to `.env.local` and supply server-only values (never commit 
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-### Google Gemini AI (Optional unless AI routes are used)
-- `GEMINI_API_KEY`
-- Optional overrides: `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_TIMEOUT_MS=25000`, `GEMINI_MAX_RETRIES=2`
+### AI Assistant (Groq Primary + Gemini Fallback)
+- `GROQ_API_KEY` (Free API key from [console.groq.com](https://console.groq.com/keys) for high-speed primary generation)
+- `GROQ_MODEL=llama-3.3-70b-versatile` (Default primary model)
+- `GEMINI_API_KEY` (Free API key from [aistudio.google.com](https://aistudio.google.com/app/apikey) for automatic fallback)
+- `GEMINI_MODEL=gemini-3.8-flash` (Default fallback model)
+- Optional overrides: `GEMINI_TIMEOUT_MS=48000`, `GEMINI_MAX_RETRIES=2`
 
 ### PayPal Multiparty Sandbox (Required for Seller Onboarding & Payments)
 - `PAYPAL_ENV=sandbox`
@@ -69,7 +72,7 @@ Confirm tables, RLS policies, and RPC grants (including `202611120002_restore_po
 Run all four checks before deploying or pushing updates:
 
 ```bash
-npm test       # 1,224 tests across 98 Vitest suites
+npm test       # 1,250 tests across 102 Vitest suites
 npm run typecheck
 npm run lint
 npm run build

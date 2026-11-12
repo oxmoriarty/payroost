@@ -342,7 +342,7 @@ export async function askProjectAssistant(
   try {
     const result = await provider.generateStructured(prompt, aiRawAssistantResponseSchema, {
       systemInstruction: PROJECT_ASSISTANT_SYSTEM_INSTRUCTION,
-      timeoutMs: options.timeoutMs ?? 30_000,
+      timeoutMs: options.timeoutMs ?? 48_000,
       signal: options.signal,
       temperature: 0.2,
     });

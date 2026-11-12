@@ -15,9 +15,13 @@ This document records the concrete differences between the initial specification
 - **Zero Resend Integration:** All Resend dependencies, webhook assumptions, and environment variables (`RESEND_API_KEY`, etc.) were completely removed across runtime code, tests, `.env.example`, and documentation.
 - **Gmail SMTP via `nodemailer`:** Transactional emails (client email verification links, review OTPs, client portal OTPs, and portal invitations) are now delivered through `nodemailer` (`^10.5.0`) in [`src/lib/email/provider.ts`](../../src/lib/email/provider.ts), configured via `SMTP_USER` and `SMTP_PASS` (with automatic whitespace normalization for 16-character Google App Passwords when `SMTP_HOST=smtp.gmail.com`) and optional overrides `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, and `PAYROOST_EMAIL_FROM`. This removes any custom sending domain requirement.
 
-## 3. AI Features: Gemini `gemini-3.8-flash`, AI-2 to AI-6 & Signed Scope Snapshots
+## 3. AI Features: Groq (Primary) + Gemini (Fallback), AI-2 to AI-6 & Signed Scope Snapshots
 
-- **Model & Client:** Switched from older Gemini starter assumptions to a dedicated server-only Gemini REST client (`src/lib/ai/`) defaulting to `gemini-3.8-flash` (`GEMINI_MODEL`, `GEMINI_TIMEOUT_MS`, `GEMINI_MAX_RETRIES`) with Zod schema validation and error/secret redaction.
+- **Resilient Dual-Provider Architecture:** To resolve free-tier timeout and latency issues (Gemini free-tier queue congestion), PayRoost implements a resilient dual-provider setup in `src/lib/ai/`:
+  - **Primary Provider (Groq):** Powered by `llama-3.3-70b-versatile` via Groq's low-latency LPUs (`src/lib/ai/groq.ts`), delivering ~1–2s responses with JSON mode enforcement.
+  - **Fallback Provider (Google Gemini):** Dedicated server-only REST client (`src/lib/ai/gemini.ts`) using `gemini-3.8-flash`.
+  - **Automatic Failover (`ResilientAiProvider`):** `src/lib/ai/resilient-provider.ts` intercepts timeout errors, rate-limit 429s, and 5xx provider failures from Groq and instantly retries against Gemini seamlessly without surfacing failures to the user.
+  - **Timeout Budget:** Raised across all AI routes from 25–30s to 48s to accommodate heavy prompt schemas and graceful failover within Vercel's execution limits.
 - **Implemented AI Workflows:**
   - `AI-2`: Project brief structuring (`/api/ai/structure-brief`)
   - `AI-3`: Structured agreement drafting (`/api/ai/generate-agreement`)

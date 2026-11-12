@@ -14,6 +14,15 @@ import { structureProjectBrief } from "@/features/briefs/service";
 export const maxDuration = 60;
 
 function getSafeConfigErrorMessage(error: AiConfigurationError): string {
+  const isGroq = error.message.toLowerCase().includes("groq");
+  if (isGroq) {
+    if (error.status === 401 || error.status === 403) {
+      return "Groq API key was rejected or is invalid. Verify GROQ_API_KEY in server configuration.";
+    }
+    if (error.status === 404) {
+      return "Configured Groq model was not found. Verify GROQ_MODEL in server configuration.";
+    }
+  }
   if (error.status === 401 || error.status === 403) {
     return "Gemini API key was rejected or lacks permission. Verify GEMINI_API_KEY in server configuration.";
   }
@@ -21,9 +30,9 @@ function getSafeConfigErrorMessage(error: AiConfigurationError): string {
     return "Configured Gemini model was not found. Verify GEMINI_MODEL (default: gemini-3.8-flash) in server configuration.";
   }
   if (error.status === 400) {
-    return "Gemini rejected the request configuration or schema. Check server AI settings.";
+    return "AI provider rejected the request configuration or schema. Check server AI settings.";
   }
-  return "AI brief generation is not configured on the server. Set GEMINI_API_KEY in your environment configuration.";
+  return "AI brief generation is not configured on the server. Set GROQ_API_KEY or GEMINI_API_KEY in your environment configuration.";
 }
 
 export async function POST(request: Request) {

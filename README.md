@@ -6,7 +6,7 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%7C%20PostgreSQL-3ECF8E.svg)](https://supabase.com/)
 [![PayPal](https://img.shields.io/badge/PayPal-Multiparty%20Sandbox-003087.svg)](https://developer.paypal.com/)
 [![AG Grid](https://img.shields.io/badge/AG%20Grid-React%20Community-0088cc.svg)](https://www.ag-grid.com/)
-[![Tests](https://img.shields.io/badge/Tests-1%2C224%20Passing-brightgreen.svg)](vitest.config.ts)
+[![Tests](https://img.shields.io/badge/Tests-1%2C250%20Passing-brightgreen.svg)](vitest.config.ts)
 
 **AI-assisted freelance agreements, milestone lifecycle management, and seller-directed marketplace payments.**
 
@@ -16,7 +16,7 @@ PayRoost bridges the gap between independent professionals and clients by turnin
 
 ## Product Highlights
 
-- **AI-Assisted Project Workflows (AI-1 to AI-6):** Supports Gemini-powered project brief structuring (`AI-2`), agreement drafting (`AI-3`), standalone milestone planning (`AI-4`), cryptographically signed read-only scope-change impact proposals (`AI-5`), and a context-aware project assistant (`AI-6`) with strict non-escalation boundaries.
+- **AI-Assisted Project Workflows (AI-1 to AI-6):** Supports resilient Groq-powered primary generation (`llama-3.3-70b-versatile`) with automatic Google Gemini fallback (`gemini-3.8-flash`) for project brief structuring (`AI-2`), agreement drafting (`AI-3`), standalone milestone planning (`AI-4`), cryptographically signed read-only scope-change impact proposals (`AI-5`), and a context-aware project assistant (`AI-6`) with strict non-escalation boundaries.
 - **Cryptographically Immutable Agreements:** Agreement versions lock upon client OTP approval. Changes require an explicit new draft revision (`vN+1`) and bilateral review, leaving an immutable approval history.
 - **Verified Client Email, Review & Portal Access:** Clients verify their email explicitly (`/verify-client-email`) and access agreement reviews (`/review/[token]`) and the workspace portal (`/portal/[token]`) via hashed bearer links, HMAC-protected OTP challenges, and timing-safe CSRF-bound sessions.
 - **Seller-Directed Marketplace Payments:** Built for **PayPal Complete Payments Platform (Multiparty)** Sandbox (`PAYPAL_PAYMENT_MODE=PLATFORM`), connecting freelancer seller accounts via Partner Referrals and routing payments directly to verified seller accounts.
@@ -44,7 +44,7 @@ PayRoost bridges the gap between independent professionals and clients by turnin
 | **Database & Auth** | [Supabase](https://supabase.com/) (PostgreSQL 15+, Row Level Security, RPCs) |
 | **Styling & UI** | [Tailwind CSS](https://tailwindcss.com/), custom UI primitives (`src/components/ui/`), Lucide icons & self-hosted `Plus Jakarta Sans` / `Manrope` |
 | **Data Grid** | [AG Grid React Community](https://www.ag-grid.com/) |
-| **AI Integration** | [Google Gemini API](https://ai.google.dev/) (Briefs, Agreements, Scope Analysis & Assistant) |
+| **AI Integration** | [Groq API](https://groq.com/) (`Llama 3.3 70B Versatile`, Primary) & [Google Gemini API](https://ai.google.dev/) (`gemini-3.8-flash`, Fallback) |
 | **Email Delivery** | Gmail SMTP via [Nodemailer](https://nodemailer.com/) (server-only, no custom domain required) |
 | **Payments** | [PayPal Complete Payments Platform (Multiparty)](https://developer.paypal.com/) Sandbox |
 | **Testing** | [Vitest](https://vitest.dev/) with `jsdom`, static SQL invariant suites |
@@ -88,10 +88,13 @@ PayRoost bridges the gap between independent professionals and clients by turnin
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-   # AI Assistant (Optional unless AI routes are used)
+   # AI Assistant (Resilient Groq Primary + Google Gemini Fallback)
+   # Free tier keys: https://console.groq.com/keys and https://aistudio.google.com/app/apikey
+   GROQ_API_KEY=gsk_your_free_groq_api_key_here
+   GROQ_MODEL=llama-3.3-70b-versatile
    GEMINI_API_KEY=your-gemini-api-key
    GEMINI_MODEL=gemini-3.8-flash
-   GEMINI_TIMEOUT_MS=25000
+   GEMINI_TIMEOUT_MS=48000
    GEMINI_MAX_RETRIES=2
 
    # PayPal Sandbox Multiparty Platform (Required for seller onboarding & checkout)
@@ -168,7 +171,7 @@ For deploying/testing against live Supabase, Gmail SMTP, Gemini, and PayPal Sand
 PayRoost includes an extensive automated test suite covering unit tests, route handlers, UI workflows, session/secret security, and database invariant contracts.
 
 ```bash
-# 1. Run all 1,224 tests across 98 suites
+# 1. Run all 1,250 tests across 102 suites
 npm test
 
 # 2. Run TypeScript compiler diagnostics

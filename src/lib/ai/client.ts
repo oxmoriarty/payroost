@@ -1,7 +1,13 @@
 import "server-only";
 
 import type { z } from "zod";
-import { DEFAULT_GEMINI_MODEL, getAiEnv, type AiConfig } from "./env";
+import {
+  DEFAULT_GEMINI_MODEL,
+  getAiEnv,
+  isGeminiConfigured,
+  isGroqConfigured,
+  type AiConfig,
+} from "./env";
 import {
   AiConfigurationError,
   AiOutputValidationError,
@@ -9,6 +15,8 @@ import {
   AiUnavailableError,
   redactSensitiveData,
 } from "./errors";
+import { GroqProvider } from "./groq";
+import { ResilientAiProvider } from "./resilient-provider";
 import type {
   AiGenerationOptions,
   AiGenerationResult,
@@ -320,7 +328,29 @@ export class GeminiProvider implements AiProvider {
 
 /**
  * Factory for creating the active AI provider based on environment configuration.
+ * Automatically deploys Groq as the high-speed primary provider (1–2s responses)
+ * and Gemini as the robust fallback when both are configured.
  */
 export function getAiProvider(customConfig?: Partial<AiConfig>): AiProvider {
+  if (customConfig?.apiKey) {
+    return new GeminiProvider({ config: customConfig });
+  }
+
+  const hasGroq = isGroqConfigured();
+  const hasGemini = isGeminiConfigured();
+
+  if (hasGroq && hasGemini) {
+    const groq = new GroqProvider();
+    const gemini = new GeminiProvider({ config: customConfig });
+    return new ResilientAiProvider({
+      primary: groq,
+      fallback: gemini,
+    });
+  }
+
+  if (hasGroq) {
+    return new GroqProvider();
+  }
+
   return new GeminiProvider({ config: customConfig });
 }

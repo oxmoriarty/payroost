@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GEMINI_MODEL, getAiEnv, isAiConfigured } from "./env";
+import {
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_GROQ_MODEL,
+  getAiEnv,
+  getGroqEnv,
+  isAiConfigured,
+  isGeminiConfigured,
+  isGroqConfigured,
+} from "./env";
 import { AiConfigurationError } from "./errors";
 
 describe("AI Environment Configuration (src/lib/ai/env.ts)", () => {
@@ -79,6 +87,24 @@ describe("AI Environment Configuration (src/lib/ai/env.ts)", () => {
         GEMINI_MAX_RETRIES: "10",
       })
     ).toThrow(AiConfigurationError);
+  });
+
+  it("handles Groq environment configuration and default model", () => {
+    expect(DEFAULT_GROQ_MODEL).toBe("llama-3.3-70b-versatile");
+    expect(isGroqConfigured({})).toBe(false);
+    expect(isGeminiConfigured({})).toBe(false);
+    expect(isGroqConfigured({ GROQ_API_KEY: "gsk_test123" })).toBe(true);
+    expect(isGeminiConfigured({ GEMINI_API_KEY: "AIzaSyTest123" })).toBe(true);
+    expect(isAiConfigured({ GROQ_API_KEY: "gsk_test123" })).toBe(true);
+
+    const groqConfig = getGroqEnv({
+      GROQ_API_KEY: "gsk_test123",
+    });
+    expect(groqConfig.apiKey).toBe("gsk_test123");
+    expect(groqConfig.model).toBe("llama-3.3-70b-versatile");
+    expect(groqConfig.timeoutMs).toBe(25000);
+
+    expect(() => getGroqEnv({})).toThrow(AiConfigurationError);
   });
 
   it("never leaks the API key in thrown error messages", () => {

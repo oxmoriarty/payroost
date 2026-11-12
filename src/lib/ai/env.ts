@@ -19,6 +19,33 @@ export interface AiConfig {
  * Gemini 3.8 Flash is Google's active, verified Free-Tier general-purpose speed model.
  */
 export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+export const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+
+export interface GroqConfig {
+  apiKey: string;
+  model: string;
+  timeoutMs: number;
+  maxRetries: number;
+  baseUrl: string;
+}
+
+const groqEnvSchema = z.object({
+  GROQ_API_KEY: z.string().trim().min(1, "GROQ_API_KEY is required and cannot be empty"),
+  GROQ_MODEL: z.string().trim().min(1, "GROQ_MODEL cannot be empty").default(DEFAULT_GROQ_MODEL),
+  GROQ_TIMEOUT_MS: z.coerce
+    .number()
+    .int("GROQ_TIMEOUT_MS must be an integer")
+    .min(1000, "GROQ_TIMEOUT_MS must be at least 1000ms")
+    .max(120000, "GROQ_TIMEOUT_MS cannot exceed 120000ms")
+    .default(25000),
+  GROQ_MAX_RETRIES: z.coerce
+    .number()
+    .int("GROQ_MAX_RETRIES must be an integer")
+    .min(0, "GROQ_MAX_RETRIES cannot be negative")
+    .max(5, "GROQ_MAX_RETRIES cannot exceed 5")
+    .default(2),
+  GROQ_BASE_URL: z.string().trim().url().default("https://api.groq.com/openai/v1"),
+});
 
 const aiEnvSchema = z.object({
   GEMINI_API_KEY: z
@@ -50,7 +77,30 @@ function resolveSource(customSource?: Record<string, string | undefined>): Recor
     GEMINI_MODEL: process.env.GEMINI_MODEL,
     GEMINI_TIMEOUT_MS: process.env.GEMINI_TIMEOUT_MS,
     GEMINI_MAX_RETRIES: process.env.GEMINI_MAX_RETRIES,
+    GROQ_API_KEY: process.env.GROQ_API_KEY,
+    GROQ_MODEL: process.env.GROQ_MODEL,
+    GROQ_TIMEOUT_MS: process.env.GROQ_TIMEOUT_MS,
+    GROQ_MAX_RETRIES: process.env.GROQ_MAX_RETRIES,
+    GROQ_BASE_URL: process.env.GROQ_BASE_URL,
   };
+}
+
+/**
+ * Checks whether Groq is configured in the current environment.
+ */
+export function isGroqConfigured(customSource?: Record<string, string | undefined>): boolean {
+  const source = resolveSource(customSource);
+  const key = source.GROQ_API_KEY?.trim();
+  return Boolean(key && key.length > 0);
+}
+
+/**
+ * Checks whether Gemini is configured in the current environment.
+ */
+export function isGeminiConfigured(customSource?: Record<string, string | undefined>): boolean {
+  const source = resolveSource(customSource);
+  const key = source.GEMINI_API_KEY?.trim();
+  return Boolean(key && key.length > 0);
 }
 
 /**
@@ -58,9 +108,37 @@ function resolveSource(customSource?: Record<string, string | undefined>): Recor
  * Does not throw when unconfigured, allowing builds and unrelated features to operate normally.
  */
 export function isAiConfigured(customSource?: Record<string, string | undefined>): boolean {
+  return isGroqConfigured(customSource) || isGeminiConfigured(customSource);
+}
+
+/**
+ * Validates and extracts server-side Groq configuration.
+ */
+export function getGroqEnv(customSource?: Record<string, string | undefined>): GroqConfig {
   const source = resolveSource(customSource);
-  const key = source.GEMINI_API_KEY?.trim();
-  return Boolean(key && key.length > 0);
+
+  if (!isGroqConfigured(customSource)) {
+    throw new AiConfigurationError(
+      "Groq is not configured. GROQ_API_KEY must be set in server environment."
+    );
+  }
+
+  const result = groqEnvSchema.safeParse(source);
+
+  if (!result.success) {
+    const errorDetails = result.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
+    throw new AiConfigurationError(`Invalid Groq configuration: ${errorDetails}`);
+  }
+
+  return {
+    apiKey: result.data.GROQ_API_KEY,
+    model: result.data.GROQ_MODEL,
+    timeoutMs: result.data.GROQ_TIMEOUT_MS,
+    maxRetries: result.data.GROQ_MAX_RETRIES,
+    baseUrl: result.data.GROQ_BASE_URL,
+  };
 }
 
 /**

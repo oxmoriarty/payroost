@@ -2,7 +2,7 @@
 
 ## 1. Architectural Overview
 
-PayRoost is implemented as a **Next.js `16.4.4` (App Router, Turbopack) modular monolith** written in strict TypeScript, backed by **Supabase** (Auth + PostgreSQL + Row Level Security + PL/pgSQL RPCs), **Google Gemini** (REST AI drafting/analysis), **PayPal Complete Payments Platform (Multiparty) Sandbox**, **Gmail SMTP (`nodemailer`)**, and **AG Grid React Community**.
+PayRoost is implemented as a **Next.js `16.4.4` (App Router, Turbopack) modular monolith** written in strict TypeScript, backed by **Supabase** (Auth + PostgreSQL + Row Level Security + PL/pgSQL RPCs), **Groq** (`llama-3.3-70b-versatile`, high-speed primary AI provider) with **Google Gemini** (`gemini-3.8-flash`, automatic fallback AI provider), **PayPal Complete Payments Platform (Multiparty) Sandbox**, **Gmail SMTP (`nodemailer`)**, and **AG Grid React Community**.
 
 External provider clients (`supabase/service.ts`, `ai/`, `paypal/`, `email/`, `security/`) live under `src/lib/` using `import "server-only"` so credentials and privileged operations never reach client bundles.
 
@@ -91,7 +91,7 @@ External provider clients (`supabase/service.ts`, `ai/`, `paypal/`, `email/`, `s
 ## 4. Feature & Infrastructure Layout
 
 - **`src/features/`** — Domain logic cleanly separated into `agreements/`, `assistant/`, `briefs/`, `freelancer/`, `history/`, `milestones/`, `notifications/`, `payments/`, `portal/`, `projects/`, and `scope-changes/`.
-- **`src/lib/ai/`** — Gemini REST client (`gemini-3.8-flash`), Zod schemas, secret/error redaction, and audit logging.
+- **`src/lib/ai/`** — Dual-provider AI infrastructure with Groq (`llama-3.3-70b-versatile`, primary) and Google Gemini (`gemini-3.8-flash`, fallback), unified under `ResilientAiProvider` with transparent failover on timeout or rate limit, 48s timeout budget, Zod schema validation, secret/error redaction, and audit logging.
 - **`src/lib/email/`** — `nodemailer` SMTP transport (`provider.ts`) and HTML/text transactional templates (`templates.ts`).
 - **`src/lib/paypal/`** — OAuth token manager (`auth.ts`), REST client (`client.ts`), env/mode resolution (`env.ts`, `payment-mode.ts`), webhook verifier & processor (`webhooks.ts`, `webhook-processor.ts`), and reconciliation service (`reconciliation-service.ts`).
 - **`src/lib/security/`** — Canonical URL resolution (`app-url.ts`), trusted proxy client IP extraction (`client-ip.ts`), operator CSRF (`operator-csrf.ts`), portal OTP & sessions (`portal-otp.ts`, `portal-session.ts`), Postgres rate limiters (`rate-limit.ts`, `review-rate-limit.ts`), and HMAC/token utilities (`tokens.ts`).

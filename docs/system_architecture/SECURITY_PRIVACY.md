@@ -42,6 +42,6 @@ Public verification, OTP issuance, review, portal, and payment routes enforce Po
 
 ## 5. AI Safety & Tamper-Proof Scope Snapshots
 
-- Prompts treat all user briefs, notes, and messages as untrusted text and never pass secrets or cross-project records to Gemini.
+- Prompts treat all user briefs, notes, and messages as untrusted text and never pass secrets, credentials, or cross-project records to external model providers (Groq or Gemini).
 - Structured JSON responses are validated with Zod before use, and humans must review/approve all agreements, milestones, dates, and change requests.
 - Scope-change analyses (`AI-5`) are signed server-side with `PAYROOST_AI_SNAPSHOT_SECRET` so clients/freelancers cannot alter a generated assessment payload prior to submitting a `change_requests` record.

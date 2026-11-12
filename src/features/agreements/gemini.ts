@@ -198,7 +198,7 @@ export async function generateAgreementDraft(
       } as unknown as z.ZodType<AgreementDraft>,
       {
         systemInstruction: AGREEMENT_GENERATION_SYSTEM_INSTRUCTION,
-        timeoutMs: options.timeoutMs ?? 30000,
+        timeoutMs: options.timeoutMs ?? 48000,
         signal: options.signal,
         temperature: 0.2,
       }

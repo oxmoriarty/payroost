@@ -316,7 +316,8 @@ describe("Phase 3B.R5: PaymentOperationsGrid Filters, Investigation & Two-Step C
     });
 
     // Switch to Webhooks tab and confirm retry/error info is shown
-    fireEvent.click(screen.getByRole("button", { name: /Webhooks \(1\)/ }));
+    const webhooksTab = await screen.findByRole("button", { name: /Webhooks \(1\)/ });
+    fireEvent.click(webhooksTab);
     expect(screen.getByText(/Sanitized reason:/)).toBeInTheDocument();
     expect(screen.getAllByText(/MAX_WEBHOOK_ATTEMPTS_EXCEEDED/).length).toBeGreaterThanOrEqual(2);
 
