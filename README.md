@@ -152,7 +152,7 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-For deploying/testing against live Supabase, Resend, Gemini, and PayPal Sandbox endpoints, follow [`live-sandbox-integration-checklist.md`](live-sandbox-integration-checklist.md).
+For deploying/testing against live Supabase, Resend, Gemini, and PayPal Sandbox endpoints, follow [`Payroost_Codex_Starter/reports_and_history/live-sandbox-integration-checklist.md`](Payroost_Codex_Starter/reports_and_history/live-sandbox-integration-checklist.md).
 
 ---
 
@@ -180,11 +180,12 @@ npm run build
 
 ```text
 payroost/
-├── Payroost_Codex_Starter/       # Product specifications and architecture docs
+├── Payroost_Codex_Starter/       # Product specifications, architecture docs & reports
 │   ├── ARCHITECTURE.md           # System design & flow specifications
 │   ├── DATA_MODEL.md             # Entity relationships & state machine
 │   ├── PAYPAL_INTEGRATION.md     # Multiparty integration & country rules
-│   └── SECURITY_PRIVACY.md       # Access model & risk boundaries
+│   ├── SECURITY_PRIVACY.md       # Access model & risk boundaries
+│   └── reports_and_history/      # Phase reports, AI audits & live Sandbox checklist
 ├── src/
 │   ├── app/                      # Next.js App Router (pages & API routes)
 │   │   ├── (app)/                # Authenticated freelancer workspace & notifications
@@ -214,7 +215,6 @@ payroost/
 │       └── supabase/             # Server, browser, middleware & service-role DB factories
 ├── supabase/
 │   └── migrations/               # 35 sequential PostgreSQL migrations
-├── live-sandbox-integration-checklist.md # Live Supabase/Resend/Gemini/PayPal Sandbox runbook
 ├── LICENSE                       # MIT Open Source License
 └── README.md                     # Repository documentation & setup guide
 ```
