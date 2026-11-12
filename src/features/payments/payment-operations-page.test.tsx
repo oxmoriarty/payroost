@@ -101,7 +101,11 @@ describe("Payment Operations Page and Data Loader", () => {
     render(pageElement);
 
     expect(mockCookieSet).not.toHaveBeenCalled();
-    expect(screen.getByText("Payment Operations & Recovery")).toBeInTheDocument();
+    expect(screen.getByText("Payments Operations")).toBeInTheDocument();
+    expect(screen.getByText("Financial ledger")).toBeInTheDocument();
+    expect(screen.queryByText(/Authoritative operational view/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Project Member \(Read-Only\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Exhausted webhooks/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("payment-operations-grid")).toHaveTextContent("No payment records");
   });
 

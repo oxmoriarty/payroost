@@ -20,15 +20,11 @@ export default async function PaymentOperationsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">
-            Payment Operations & Recovery
+            Payments Operations
           </p>
           <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">
-            Financial ledger, recovery, and observability.
+            Financial ledger
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-ink-700 sm:text-base">
-            Authoritative operational view of PayPal Sandbox payments. Monitor active transactions,
-            investigate ambiguous states, and execute audited reconciliation without compromising ledger immutability.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {summary.reconciliationRequired > 0 && (
@@ -36,9 +32,9 @@ export default async function PaymentOperationsPage() {
               {summary.reconciliationRequired} Requires Attention
             </Badge>
           )}
-          <Badge tone={isOwner ? "success" : "neutral"}>
-            {isOwner ? "Operator Authorized" : "Project Member (Read-Only)"}
-          </Badge>
+          {isOwner && (
+            <Badge tone="success">Operator Authorized</Badge>
+          )}
         </div>
       </div>
 
@@ -70,8 +66,7 @@ export default async function PaymentOperationsPage() {
             {summary.reconciliationRequired}
           </p>
           <p className="mt-1 text-[11px] text-ink-500 sm:text-xs">
-            Expired leases: {summary.expiredLeases ?? 0} • Exhausted webhooks:{" "}
-            {summary.exhaustedWebhooks ?? 0}
+            Expired leases: {summary.expiredLeases ?? 0}
           </p>
         </Card>
         <Card className="pr-interactive-card p-4 sm:p-5 hover:border-ink-200">

@@ -39,12 +39,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-300">Provider-confirmed</p>
-        <p className="mt-2 text-sm leading-5 text-slate-300">
-          Deliverable acceptance and PayPal payment records stay strictly separated.
-        </p>
-      </div>
     </aside>
   );
 }
