@@ -37,7 +37,7 @@ describe("PayPalSellerSettingsCard UI States", () => {
     await waitFor(() => {
       expect(screen.getByText("Not Connected")).toBeInTheDocument();
       expect(screen.getByText("Connect PayPal Sandbox Seller Account")).toBeInTheDocument();
-      expect(screen.getByText(/Model 1 Platform Marketplace/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Model 1 Platform Marketplace/i)).not.toBeInTheDocument();
     });
 
     vi.unstubAllGlobals();

@@ -191,10 +191,7 @@ export default async function DashboardPage() {
               <span className="grid size-10 place-items-center rounded-xl bg-teal-50 text-teal-700">
                 <Clock3 size={20} />
               </span>
-              <div>
-                <h2 className="font-display text-2xl text-ink-950">Recent activity</h2>
-                <p className="text-sm text-ink-700">Audit trail across your workspace</p>
-              </div>
+              <h2 className="font-display text-2xl text-ink-950">Recent activity</h2>
             </div>
 
             {dashboard.recentActivities.length === 0 ? (

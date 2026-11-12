@@ -35,7 +35,8 @@ describe("Phase 3B.2.4: Public Portal Entry & OTP Challenge Dispatch", () => {
     emailProvider.emailDeliveryLog.length = 0;
     setNodeEnv(originalNodeEnv);
     process.env.PORTAL_OTP_HMAC_SECRET = "test-hmac-secret-min-32-bytes-long-for-testing!!";
-    delete process.env.RESEND_API_KEY;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
     delete process.env.TRUST_PROXY;
 
     // Default mock behavior

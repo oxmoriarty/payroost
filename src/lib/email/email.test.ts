@@ -10,14 +10,12 @@ import {
 } from "./provider";
 
 function clearEmailEnv(): void {
-  delete process.env.EMAIL_PROVIDER;
   delete process.env.SMTP_HOST;
   delete process.env.SMTP_PORT;
   delete process.env.SMTP_SECURE;
   delete process.env.SMTP_USER;
   delete process.env.SMTP_PASS;
   delete process.env.PAYROOST_EMAIL_FROM;
-  delete process.env.RESEND_API_KEY;
 }
 
 
@@ -134,7 +132,7 @@ describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
     });
 
     it("captures sent email in test-mode delivery log without leaking body secrets", async () => {
-      // In test mode without RESEND_API_KEY, sendEmail pushes to emailDeliveryLog
+      // In test mode without SMTP credentials, sendEmail pushes to emailDeliveryLog
       const result = await sendPortalOtpEmail({
         clientEmail: "verified-client@acme.corp",
         projectTitle: "SaaS Platform",
@@ -150,72 +148,6 @@ describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
       // emailDeliveryLog stores only { to, subject } - does not store text/html body or tokens
       expect(emailDeliveryLog[0]).not.toHaveProperty("html");
       expect(emailDeliveryLog[0]).not.toHaveProperty("text");
-    });
-
-    it("dispatches successfully via Resend API when configured", async () => {
-      process.env.RESEND_API_KEY = "re_test_api_key_12345";
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "msg_resend_mock_id_abc123" }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-
-      const result = await sendPortalOtpEmail({
-        clientEmail: "verified-client@acme.corp",
-        projectTitle: "SaaS Platform",
-        otpCode: "123456",
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBe("msg_resend_mock_id_abc123");
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      const [url, requestInit] = mockFetch.mock.calls[0];
-      expect(url).toBe("https://api.resend.com/emails");
-      expect(requestInit.headers.Authorization).toBe("Bearer re_test_api_key_12345");
-
-      const body = JSON.parse(requestInit.body);
-      expect(body.to).toBe("verified-client@acme.corp");
-      expect(body.subject).toContain("123456");
-    });
-
-    it("handles Resend API rejection safely without leaking API key in error message", async () => {
-      process.env.RESEND_API_KEY = "re_super_secret_key_hidden";
-
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 403,
-        text: async () => JSON.stringify({ message: "Domain not verified on Resend" }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-
-      const result = await sendPortalOtpEmail({
-        clientEmail: "client@unverified.org",
-        projectTitle: "Project",
-        otpCode: "123456",
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toMatch(/EMAIL_SEND_FAILED \(403\)/);
-      expect(result.error).not.toContain("re_super_secret_key_hidden");
-    });
-
-    it("handles network failure safely and sanitizes error", async () => {
-      process.env.RESEND_API_KEY = "re_secret_key";
-
-      const mockFetch = vi.fn().mockRejectedValue(new Error("Connection reset by peer"));
-      vi.stubGlobal("fetch", mockFetch);
-
-      const result = await sendPortalOtpEmail({
-        clientEmail: "client@example.com",
-        projectTitle: "Project",
-        otpCode: "123456",
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("Connection reset by peer");
     });
   });
 
@@ -289,9 +221,9 @@ describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
   });
 
   // ==========================================================================
-  // Gmail SMTP Delivery & Dual-Provider Resolution
+  // Gmail SMTP Delivery & Configuration Validation
   // ==========================================================================
-  describe("Gmail SMTP & Provider Resolution", () => {
+  describe("Gmail SMTP & Configuration", () => {
     it("dispatches via Gmail SMTP defaults when SMTP_USER and SMTP_PASS are set", async () => {
       process.env.SMTP_USER = "freelancer@gmail.com";
       process.env.SMTP_PASS = "abcd efgh ijkl mnop";
@@ -383,29 +315,31 @@ describe("Phase 3B.2.1: Client Portal OTP Email Template & Dispatch", () => {
       expect(result.error).toContain("EMAIL_PROVIDER_MISCONFIGURED");
     });
 
-    it("respects explicit EMAIL_PROVIDER=resend even when SMTP vars are configured", async () => {
-      process.env.EMAIL_PROVIDER = "resend";
+    it("rejects invalid SMTP_PORT or SMTP_SECURE settings cleanly", async () => {
       process.env.SMTP_USER = "freelancer@gmail.com";
       process.env.SMTP_PASS = "abcdefghijklmnop";
-      process.env.RESEND_API_KEY = "re_explicit_resend_key";
+      process.env.SMTP_PORT = "not-a-port";
 
-      const createTransportSpy = vi.spyOn(nodemailer, "createTransport");
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: "resend_msg_456" }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
+      expect(isEmailConfigured()).toBe(false);
 
-      const result = await sendPortalOtpEmail({
+      const badPortResult = await sendPortalOtpEmail({
         clientEmail: "client@example.com",
         projectTitle: "Project",
         otpCode: "123456",
       });
+      expect(badPortResult.success).toBe(false);
+      expect(badPortResult.error).toContain("EMAIL_PROVIDER_MISCONFIGURED");
 
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBe("resend_msg_456");
-      expect(createTransportSpy).not.toHaveBeenCalled();
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      process.env.SMTP_PORT = "465";
+      process.env.SMTP_SECURE = "invalid";
+
+      const badSecureResult = await sendPortalOtpEmail({
+        clientEmail: "client@example.com",
+        projectTitle: "Project",
+        otpCode: "123456",
+      });
+      expect(badSecureResult.success).toBe(false);
+      expect(badSecureResult.error).toContain("EMAIL_PROVIDER_MISCONFIGURED");
     });
 
     it("redacts SMTP_PASS from error messages on authentication or transport failure", async () => {

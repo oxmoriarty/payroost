@@ -38,7 +38,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/security/rate-limit", () => ({
-  allowRequest: vi.fn(),
+  checkRateLimit: vi.fn(),
 }));
 
 describe("POST /api/ai/structure-brief", () => {
@@ -72,7 +72,14 @@ describe("POST /api/ai/structure-brief", () => {
       error: null,
     });
 
-    vi.mocked(rateLimitModule.allowRequest).mockResolvedValue(true);
+    vi.mocked(rateLimitModule.checkRateLimit).mockResolvedValue({
+      allowed: true,
+      current: 1,
+      limit: 15,
+      resetAt: Date.now() + 3_600_000,
+      status: "allowed",
+      isUnavailable: false,
+    });
 
     mockMaybeSingle.mockResolvedValue({
       data: {
@@ -111,7 +118,14 @@ describe("POST /api/ai/structure-brief", () => {
   });
 
   it("returns 429 RATE_LIMITED when user exceeds rate limits", async () => {
-    vi.mocked(rateLimitModule.allowRequest).mockResolvedValueOnce(false);
+    vi.mocked(rateLimitModule.checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      current: 16,
+      limit: 15,
+      resetAt: Date.now() + 3_600_000,
+      status: "rate_limited",
+      isUnavailable: false,
+    });
 
     const request = new Request("http://localhost/api/ai/structure-brief", {
       method: "POST",
@@ -124,6 +138,30 @@ describe("POST /api/ai/structure-brief", () => {
 
     expect(response.status).toBe(429);
     expect(json.error).toBe("RATE_LIMITED");
+  });
+
+  it("returns 503 RATE_LIMITER_UNAVAILABLE when the rate-limit store fails", async () => {
+    vi.mocked(rateLimitModule.checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      current: 0,
+      limit: 15,
+      resetAt: Date.now() + 60_000,
+      status: "service_unavailable",
+      isUnavailable: true,
+    });
+
+    const request = new Request("http://localhost/api/ai/structure-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "Valid project description for testing" }),
+    });
+
+    const response = await POST(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json.error).toBe("RATE_LIMITER_UNAVAILABLE");
+    expect(json.message).toMatch(/rate limiting/i);
   });
 
   it("returns 400 INVALID_JSON when body is malformed", async () => {
@@ -190,6 +228,28 @@ describe("POST /api/ai/structure-brief", () => {
     expect(json.error).toBe("FORBIDDEN");
   });
 
+  it("returns 500 DATABASE_ERROR instead of 403 when project ownership query fails", async () => {
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { code: "42501", message: "permission denied for table projects" },
+    });
+
+    const request = new Request("http://localhost/api/ai/structure-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        description: "Valid description provided alongside projectId",
+      }),
+    });
+
+    const response = await POST(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(json.error).toBe("DATABASE_ERROR");
+  });
+
   it("successfully structures brief from submitted natural language description", async () => {
     const request = new Request("http://localhost/api/ai/structure-brief", {
       method: "POST",
@@ -242,9 +302,9 @@ describe("POST /api/ai/structure-brief", () => {
     );
   });
 
-  it("maps AiConfigurationError to 500 AI_CONFIG_ERROR without leaking secrets", async () => {
+  it("maps AiConfigurationError to 500 AI_CONFIG_ERROR with safe actionable message and no secret leakage", async () => {
     vi.spyOn(briefService, "structureProjectBrief").mockRejectedValueOnce(
-      new AiConfigurationError("Invalid Gemini configuration: key AIzaSyDUMMY1234567890 rejected")
+      new AiConfigurationError("Invalid Gemini configuration: key AIzaSyDUMMY1234567890 rejected", { status: 401 })
     );
 
     const request = new Request("http://localhost/api/ai/structure-brief", {
@@ -258,10 +318,25 @@ describe("POST /api/ai/structure-brief", () => {
 
     expect(response.status).toBe(500);
     expect(json.error).toBe("AI_CONFIG_ERROR");
+    expect(json.message).toMatch(/GEMINI_API_KEY/i);
     expect(JSON.stringify(json)).not.toContain("AIza");
+
+    vi.spyOn(briefService, "structureProjectBrief").mockRejectedValueOnce(
+      new AiConfigurationError("Gemini model not found", { status: 404 })
+    );
+    const modelNotFoundReq = new Request("http://localhost/api/ai/structure-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "Valid project description for testing" }),
+    });
+    const modelRes = await POST(modelNotFoundReq);
+    const modelJson = await modelRes.json();
+    expect(modelRes.status).toBe(500);
+    expect(modelJson.error).toBe("AI_CONFIG_ERROR");
+    expect(modelJson.message).toMatch(/gemini-3\.8-flash/i);
   });
 
-  it("maps AiUnavailableError to 503 AI_UNAVAILABLE", async () => {
+  it("maps AiUnavailableError to 503 AI_UNAVAILABLE and distinguishes timeouts", async () => {
     vi.spyOn(briefService, "structureProjectBrief").mockRejectedValueOnce(
       new AiUnavailableError("Gemini service is unavailable")
     );
@@ -277,6 +352,21 @@ describe("POST /api/ai/structure-brief", () => {
 
     expect(response.status).toBe(503);
     expect(json.error).toBe("AI_UNAVAILABLE");
+    expect(json.message).toMatch(/temporarily unavailable/i);
+
+    vi.spyOn(briefService, "structureProjectBrief").mockRejectedValueOnce(
+      new AiUnavailableError("Gemini request timed out", { isTimeout: true })
+    );
+    const timeoutReq = new Request("http://localhost/api/ai/structure-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "Valid project description for testing" }),
+    });
+    const timeoutRes = await POST(timeoutReq);
+    const timeoutJson = await timeoutRes.json();
+    expect(timeoutRes.status).toBe(503);
+    expect(timeoutJson.error).toBe("AI_UNAVAILABLE");
+    expect(timeoutJson.message).toMatch(/timed out/i);
   });
 
   it("maps AiRateLimitError to 429 AI_RATE_LIMITED", async () => {

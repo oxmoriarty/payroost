@@ -30,11 +30,15 @@ describe("ProjectBriefAssistant UI Component", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the initial input state with disabled submit when input is too short", () => {
+  it("renders the initial input state without removed helper copy and with disabled submit when input is too short", () => {
     render(<ProjectBriefAssistant />);
 
     expect(screen.getByText("AI Project Brief Assistant")).toBeInTheDocument();
     expect(screen.getByLabelText("Client project description")).toBeInTheDocument();
+    expect(screen.queryByText(/Free Tier/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Transform rough client notes/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/All AI output is reviewed by you before use/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Untrusted client input is isolated/i)).not.toBeInTheDocument();
 
     const submitBtn = screen.getByRole("button", { name: /structure brief with ai/i });
     expect(submitBtn).toBeDisabled();
@@ -134,7 +138,7 @@ describe("ProjectBriefAssistant UI Component", () => {
     });
   });
 
-  it("displays error state when generation fails", async () => {
+  it("displays specific actionable messages for config, rate-limiter, rate-limit, timeout, and 503 errors", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -151,6 +155,54 @@ describe("ProjectBriefAssistant UI Component", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
       expect(screen.getByText(/AI service is temporarily unavailable/i)).toBeInTheDocument();
+    });
+
+    // Server config error with safe actionable message
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          error: "AI_CONFIG_ERROR",
+          message: "GEMINI_API_KEY is not configured on the server.",
+        }),
+    } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /structure brief with ai/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/GEMINI_API_KEY is not configured/i)).toBeInTheDocument();
+    });
+
+    // Rate limiter DB unavailable vs AI unavailable
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ error: "RATE_LIMITER_UNAVAILABLE" }),
+    } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /structure brief with ai/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Rate limiting service is temporarily unavailable/i)).toBeInTheDocument();
+    });
+
+    // Non-JSON gateway timeout (e.g. Vercel/proxy 504 HTML)
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 504,
+      json: () => Promise.reject(new SyntaxError("Unexpected token <")),
+    } as unknown as Response);
+    fireEvent.click(screen.getByRole("button", { name: /structure brief with ai/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/timed out before finishing/i)).toBeInTheDocument();
+    });
+
+    // Schema output invalid 422
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      json: () => Promise.resolve({ error: "AI_OUTPUT_INVALID" }),
+    } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /structure brief with ai/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/incomplete brief/i)).toBeInTheDocument();
     });
   });
 

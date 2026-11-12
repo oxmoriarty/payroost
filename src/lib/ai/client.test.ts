@@ -362,4 +362,49 @@ describe("GeminiProvider (src/lib/ai/client.ts)", () => {
       AiUnavailableError
     );
   });
+
+  it("strips markdown json code fences before Zod parsing", async () => {
+    const fencedText = [
+      "```json",
+      JSON.stringify({ title: "Fenced Project", milestonesCount: 3 }),
+      "```",
+    ].join("\n");
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: fencedText }] } }],
+        }),
+        { status: 200 }
+      )
+    );
+
+    const provider = new GeminiProvider({
+      config: baseConfig,
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    const result = await provider.generateStructured("Prompt", testSchema);
+    expect(result.data).toEqual({ title: "Fenced Project", milestonesCount: 3 });
+  });
+
+  it("respects an overall timeout deadline across retry attempts", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response("Service busy", { status: 503 })
+    );
+
+    const provider = new GeminiProvider({
+      config: { ...baseConfig, timeoutMs: 25, maxRetries: 4 },
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    const start = Date.now();
+    await expect(provider.generateStructured("Prompt", testSchema)).rejects.toThrow(
+      AiUnavailableError
+    );
+    const elapsed = Date.now() - start;
+
+    // Without overall deadline gating, 4 exponential backoff retries would exceed 2s+.
+    expect(elapsed).toBeLessThan(1000);
+  });
 });

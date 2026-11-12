@@ -83,31 +83,62 @@ export interface PaymentOperationsDataResult {
   error?: string | null;
 }
 
+function createEmptySummary(): PaymentOperationsSummary {
+  return {
+    totalRecords: 0,
+    confirmedCaptures: 0,
+    reconciliationRequired: 0,
+    inFlight: 0,
+    totalVolumeCents: 0,
+    isOwner: false,
+    exhaustedWebhooks: 0,
+    expiredLeases: 0,
+    platformCount: 0,
+    merchantCount: 0,
+  };
+}
+
+function normalizeRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+}
+
 /**
  * Server-side loader for Payment Operations data.
  * Queries Supabase using the authenticated user's client (strictly adhering to RLS policies)
  * and correlates with payment transactions and webhook processing status.
  */
 export async function getPaymentOperationsData(): Promise<PaymentOperationsDataResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  let supabase;
+  let user = null;
 
-  if (authError || !user) {
+  try {
+    supabase = await createClient();
+    const {
+      data: { user: authenticatedUser },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !authenticatedUser) {
+      return {
+        rows: [],
+        summary: createEmptySummary(),
+        isOwner: false,
+        error: "UNAUTHORIZED",
+      };
+    }
+    user = authenticatedUser;
+  } catch (err) {
+    console.error("[getPaymentOperationsData] Auth check failed", {
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
     return {
       rows: [],
-      summary: {
-        totalRecords: 0,
-        confirmedCaptures: 0,
-        reconciliationRequired: 0,
-        inFlight: 0,
-        totalVolumeCents: 0,
-        isOwner: false,
-      },
+      summary: createEmptySummary(),
       isOwner: false,
-      error: "UNAUTHORIZED",
+      error: "Unable to verify your session. Please sign in and reload.",
     };
   }
 
@@ -148,30 +179,45 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     .order("created_at", { ascending: false });
 
   if (intentsError) {
+    console.error("[getPaymentOperationsData] payment_intents query failed", {
+      code: intentsError.code ?? null,
+      message: intentsError.message ?? null,
+      hint: intentsError.hint ?? null,
+    });
+    const safeErrorMessage =
+      intentsError.code === "42501"
+        ? "Database permissions for payment records are missing. Ensure the latest Supabase migrations are applied."
+        : "Could not load payment records from the database. Please reload and try again.";
     return {
       rows: [],
-      summary: {
-        totalRecords: 0,
-        confirmedCaptures: 0,
-        reconciliationRequired: 0,
-        inFlight: 0,
-        totalVolumeCents: 0,
-        isOwner: false,
-      },
+      summary: createEmptySummary(),
       isOwner: false,
-      error: intentsError.message,
+      error: safeErrorMessage,
     };
   }
+
+  type ProjectRelation = {
+    id: string;
+    title: string | null;
+    client_name: string | null;
+    client_email: string | null;
+    owner_id: string;
+  };
+  type MilestoneRelation = {
+    id: string;
+    title: string | null;
+    status: string | null;
+  };
 
   const rawIntents = (intents || []) as unknown as Array<{
     id: string;
     project_id: string;
     milestone_id: string;
     status: PaymentIntentStatus;
-    expected_amount_cents: number;
-    expected_amount_canonical: string;
-    expected_currency: string;
-    expected_merchant_id: string;
+    expected_amount_cents: number | null;
+    expected_amount_canonical: string | null;
+    expected_currency: string | null;
+    expected_merchant_id: string | null;
     canonical_payload_json: unknown;
     provider_order_id: string | null;
     order_creation_lease_expires_at: string | null;
@@ -179,20 +225,10 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     reconciliation_reason: string | null;
     buyer_approved_at: string | null;
     completed_at: string | null;
-    created_at: string;
-    updated_at: string;
-    projects: {
-      id: string;
-      title: string;
-      client_name: string | null;
-      client_email: string | null;
-      owner_id: string;
-    } | null;
-    milestones: {
-      id: string;
-      title: string;
-      status: string;
-    } | null;
+    created_at: string | null;
+    updated_at: string | null;
+    projects: ProjectRelation | ProjectRelation[] | null;
+    milestones: MilestoneRelation | MilestoneRelation[] | null;
   }>;
 
   const intentIds = rawIntents.map((i) => i.id);
@@ -211,12 +247,17 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
   }> = [];
 
   if (intentIds.length > 0) {
-    const { data: txData } = await supabase
+    const { data: txData, error: txError } = await supabase
       .from("payment_transactions")
       .select("id, payment_intent_id, provider_reference_id, transaction_type, status, amount_cents, currency, payee_merchant_id, captured_at")
       .in("payment_intent_id", intentIds);
 
-    if (txData) {
+    if (txError) {
+      console.error("[getPaymentOperationsData] payment_transactions query failed", {
+        code: txError.code ?? null,
+        message: txError.message ?? null,
+      });
+    } else if (txData) {
       transactions = txData as unknown as typeof transactions;
     }
   }
@@ -359,10 +400,26 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
   let userIsOwnerOfAny = false;
 
   const rows: PaymentOperationRow[] = rawIntents.map((intent) => {
-    const project = intent.projects;
-    const milestone = intent.milestones;
+    const project = normalizeRelation(intent.projects);
+    const milestone = normalizeRelation(intent.milestones);
     const isOwner = project?.owner_id === user.id;
     if (isOwner) userIsOwnerOfAny = true;
+
+    const amountCents =
+      typeof intent.expected_amount_cents === "number" &&
+      Number.isFinite(intent.expected_amount_cents)
+        ? intent.expected_amount_cents
+        : 0;
+    const currency =
+      typeof intent.expected_currency === "string" && intent.expected_currency.trim()
+        ? intent.expected_currency.trim().toUpperCase()
+        : "USD";
+    const amountCanonical =
+      typeof intent.expected_amount_canonical === "string" && intent.expected_amount_canonical
+        ? intent.expected_amount_canonical
+        : (amountCents / 100).toFixed(2);
+    const payeeMerchantId =
+      typeof intent.expected_merchant_id === "string" ? intent.expected_merchant_id : "";
 
     const parsedPaymentMeta = parseIntentPaymentMetadata(intent.canonical_payload_json);
     const derivedPaymentMode = parsedPaymentMeta.valid ? parsedPaymentMeta.mode : undefined;
@@ -377,12 +434,20 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     const captureTx =
       intentCaptures.find((tx) => tx.status === "COMPLETED") || intentCaptures[0];
 
-    const creationLeaseMs = intent.order_creation_lease_expires_at
+    const rawCreationLeaseMs = intent.order_creation_lease_expires_at
       ? new Date(intent.order_creation_lease_expires_at).getTime()
       : null;
-    const captureLeaseMs = intent.capture_lease_expires_at
+    const creationLeaseMs =
+      rawCreationLeaseMs !== null && Number.isFinite(rawCreationLeaseMs)
+        ? rawCreationLeaseMs
+        : null;
+    const rawCaptureLeaseMs = intent.capture_lease_expires_at
       ? new Date(intent.capture_lease_expires_at).getTime()
       : null;
+    const captureLeaseMs =
+      rawCaptureLeaseMs !== null && Number.isFinite(rawCaptureLeaseMs)
+        ? rawCaptureLeaseMs
+        : null;
 
     const hasExpiredCreationLease = Boolean(creationLeaseMs !== null && creationLeaseMs <= now);
     const hasExpiredCaptureLease = Boolean(captureLeaseMs !== null && captureLeaseMs <= now);
@@ -402,7 +467,9 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       intent.provider_order_id ? webhookCountByResourceId.get(intent.provider_order_id) ?? 0 : 0
     );
 
-    const createdMs = new Date(intent.created_at).getTime();
+    const createdAt = intent.created_at || "";
+    const updatedAt = intent.updated_at || createdAt;
+    const createdMs = createdAt ? new Date(createdAt).getTime() : Number.NaN;
     const idempotencyWindowExpired = Number.isFinite(createdMs)
       ? now - createdMs >= PAYPAL_MAX_IDEMPOTENCY_MS
       : false;
@@ -411,9 +478,9 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       status: intent.status,
       paymentMode: derivedPaymentMode,
       sellerPayerId,
-      expectedMerchantId: intent.expected_merchant_id,
-      expectedCurrency: intent.expected_currency,
-      expectedAmountCents: intent.expected_amount_cents,
+      expectedMerchantId: payeeMerchantId,
+      expectedCurrency: currency,
+      expectedAmountCents: amountCents,
       providerOrderId: intent.provider_order_id,
       captureId: captureTx?.provider_reference_id || null,
       hasCompletedCaptureTx: intentCaptures.some((tx) => tx.status === "COMPLETED"),
@@ -434,12 +501,12 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       clientName: project?.client_name || "—",
       milestoneId: intent.milestone_id,
       milestoneName: milestone?.title || "Milestone",
-      amountCents: intent.expected_amount_cents,
-      amountCanonical: intent.expected_amount_canonical,
-      currency: intent.expected_currency,
+      amountCents,
+      amountCanonical,
+      currency,
       status: intent.status,
       paymentMode: derivedPaymentMode,
-      payeeMerchantId: intent.expected_merchant_id,
+      payeeMerchantId,
       sellerPayerId,
       providerOrderId: intent.provider_order_id,
       captureId: captureTx?.provider_reference_id || null,
@@ -464,8 +531,8 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
       hasInconsistency: inconsistencies.length > 0,
       idempotencyWindowExpired,
       isOwner,
-      createdAt: intent.created_at,
-      updatedAt: intent.updated_at,
+      createdAt,
+      updatedAt,
     };
   });
 
@@ -478,7 +545,7 @@ export async function getPaymentOperationsData(): Promise<PaymentOperationsDataR
     ).length,
     totalVolumeCents: rows
       .filter((r) => r.status === "COMPLETED")
-      .reduce((sum, r) => sum + r.amountCents, 0),
+      .reduce((sum, r) => sum + (Number.isFinite(r.amountCents) ? r.amountCents : 0), 0),
     isOwner: userIsOwnerOfAny,
     exhaustedWebhooks: rows.filter((r) => r.webhookIsExhausted).length,
     expiredLeases: rows.filter((r) => r.hasExpiredLease).length,

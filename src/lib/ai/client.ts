@@ -51,6 +51,17 @@ export interface GeminiProviderOptions {
 }
 
 /**
+ * Strips optional wrapping Markdown code fences (e.g., ```json ... ```) when present
+ * without altering already-plain or genuinely malformed payloads.
+ */
+function stripMarkdownCodeFence(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  const match = /^```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```\s*$/i.exec(trimmed);
+  return match ? match[1].trim() : trimmed;
+}
+
+/**
  * Robust Google Gemini provider implementation.
  * Encapsulates direct REST communication, exponential backoff, timeouts, and Zod validation.
  */
@@ -82,6 +93,7 @@ export class GeminiProvider implements AiProvider {
   ): Promise<AiGenerationResult<T>> {
     const startTime = Date.now();
     const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs;
+    const deadline = startTime + timeoutMs;
     const maxRetries = this.config.maxRetries;
 
     const bodyPayload = {
@@ -111,13 +123,18 @@ export class GeminiProvider implements AiProvider {
         });
       }
 
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new AiUnavailableError("Gemini request timed out.", { isTimeout: true });
+      }
+
       const controller = new AbortController();
       let timedOut = false;
 
       const timeoutId = setTimeout(() => {
         timedOut = true;
         controller.abort();
-      }, timeoutMs);
+      }, remainingMs);
 
       const onCallerAbort = () => {
         controller.abort();
@@ -152,7 +169,7 @@ export class GeminiProvider implements AiProvider {
 
           let parsedJson: unknown;
           try {
-            parsedJson = JSON.parse(rawText);
+            parsedJson = JSON.parse(stripMarkdownCodeFence(rawText));
           } catch {
             throw new AiOutputValidationError("Gemini returned malformed JSON.", {
               rawOutput: rawText,
@@ -197,12 +214,14 @@ export class GeminiProvider implements AiProvider {
           const retryAfterSeconds = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
 
           if (attempt < maxRetries) {
-            attempt++;
             const backoffMs = retryAfterSeconds && !Number.isNaN(retryAfterSeconds)
               ? Math.min(retryAfterSeconds * 1000, 10000)
-              : Math.min(1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200), 10000);
-            await this.sleepFn(backoffMs);
-            continue;
+              : Math.min(1000 * 2 ** attempt + Math.floor(Math.random() * 200), 10000);
+            if (Date.now() + backoffMs < deadline) {
+              attempt++;
+              await this.sleepFn(backoffMs);
+              continue;
+            }
           }
 
           throw new AiRateLimitError("Gemini API rate limit exceeded (HTTP 429).", {
@@ -213,10 +232,12 @@ export class GeminiProvider implements AiProvider {
         // Retryable 5xx Server Errors (500, 502, 503, 504)
         if (status >= 500 && status <= 504) {
           if (attempt < maxRetries) {
-            attempt++;
-            const backoffMs = Math.min(1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200), 10000);
-            await this.sleepFn(backoffMs);
-            continue;
+            const backoffMs = Math.min(1000 * 2 ** attempt + Math.floor(Math.random() * 200), 10000);
+            if (Date.now() + backoffMs < deadline) {
+              attempt++;
+              await this.sleepFn(backoffMs);
+              continue;
+            }
           }
 
           throw new AiUnavailableError(`Gemini service is unavailable (HTTP ${status}).`, {
@@ -274,10 +295,12 @@ export class GeminiProvider implements AiProvider {
         lastError = err instanceof Error ? err : new Error(String(err));
 
         if (attempt < maxRetries) {
-          attempt++;
-          const backoffMs = Math.min(1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200), 10000);
-          await this.sleepFn(backoffMs);
-          continue;
+          const backoffMs = Math.min(1000 * 2 ** attempt + Math.floor(Math.random() * 200), 10000);
+          if (Date.now() + backoffMs < deadline) {
+            attempt++;
+            await this.sleepFn(backoffMs);
+            continue;
+          }
         }
 
         throw new AiUnavailableError("Gemini service is currently unreachable.", {

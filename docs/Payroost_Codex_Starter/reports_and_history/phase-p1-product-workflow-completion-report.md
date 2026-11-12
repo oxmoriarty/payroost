@@ -144,7 +144,7 @@ All checks below were executed cleanly **after the final code edit**:
 | --- | --- | --- | --- |
 | TypeScript | `npx tsc --noEmit` | Passed (exit `0`) | Zero errors |
 | ESLint | `npx eslint .` | Passed (exit `0`) | Zero errors/warnings |
-| Full Test Suite | `npm test` (`vitest run`) | **83 / 83** test files passed; **1,142 / 1,142** tests passed (`0` failures, `0` skipped) | Uses deterministic mocks where Supabase/Resend/Gemini/PayPal external services are absent |
+| Full Test Suite | `npm test` (`vitest run`) | **83 / 83** test files passed; **1,142 / 1,142** tests passed (`0` failures, `0` skipped) | Uses deterministic mocks where Supabase/SMTP/Gemini/PayPal external services are absent |
 | Production Build | `npm run build` (`next build`) | Passed (exit `0`) | All 21 static/dynamic route passes compiled cleanly with Next.js 16.4.4 (Turbopack) |
 
 ### Highlighted P1 New / Updated Test Coverage (verified in `npm test`)
@@ -162,7 +162,7 @@ All checks below were executed cleanly **after the final code edit**:
 
 ## 9. Known Limitations & Deferred Dependencies
 
-- **Live External Credentials:** Vitest verification uses deterministic mocks; end-to-end live behavior with Supabase Auth/RLS email delivery, Resend templates, Gemini Free Tier API, and live/sandbox PayPal checkout depends on configured environment secrets outside repository scope.
+- **Live External Credentials:** Vitest verification uses deterministic mocks; end-to-end live behavior with Supabase Auth/RLS email delivery, transactional email templates, Gemini Free Tier API, and live/sandbox PayPal checkout depends on configured environment secrets outside repository scope.
 - **Unpaid USD Acceptance Constraint:** By design under confirmed Preflight Decision #2, clients cannot accept an unpaid USD milestone while PayPal checkout disallows `ACCEPTED` milestones; the milestone must either be paid while `SUBMITTED` or returned via `REQUEST_REVISION`.
 - **Client Account Auth Deferred:** Clients authenticate via email verification + OTP + portal token links (`/review/[token]`, `/portal/[token]`) rather than standalone client Supabase login accounts, preserving schema/RLS boundaries.
 

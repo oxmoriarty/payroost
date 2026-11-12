@@ -39,15 +39,25 @@ export const agreementDraftSchema = z.object({
 export type AgreementDraft = z.infer<typeof agreementDraftSchema>;
 
 export const projectInputSchema = z.object({
-  title: z.string().trim().min(2).max(140),
-  clientName: z.string().trim().min(2).max(140),
-  clientEmail: z.string().trim().email().max(320),
-  brief: z.string().trim().min(20).max(20000),
-  totalAmountMinor: z.coerce.number().int().positive().max(9_000_000_000_000),
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  startDate: z.string().date().optional().or(z.literal("")),
-  targetEndDate: z.string().date().optional().or(z.literal("")),
-});
+  title: z.string().trim().min(2, "Project title must be at least 2 characters.").max(140, "Project title must be 140 characters or less."),
+  clientName: z.string().trim().min(2, "Client name must be at least 2 characters.").max(140, "Client name must be 140 characters or less."),
+  clientEmail: z.string().trim().email("Enter a valid client email address.").max(320, "Client email must be 320 characters or less."),
+  brief: z.string().trim().min(20, "Project brief must be at least 20 characters.").max(20000, "Project brief must be 20,000 characters or less."),
+  totalAmountMinor: z.coerce
+    .number()
+    .int("Total amount must be a whole number in minor units.")
+    .positive("Total amount must be greater than zero.")
+    .max(9_000_000_000_000, "Total amount exceeds the supported maximum."),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Select a valid 3-letter currency code."),
+  startDate: z.string().date("Start date must be a valid YYYY-MM-DD date.").optional().or(z.literal("")),
+  targetEndDate: z.string().date("Target end date must be a valid YYYY-MM-DD date.").optional().or(z.literal("")),
+}).refine(
+  (data) => !data.startDate || !data.targetEndDate || data.targetEndDate >= data.startDate,
+  {
+    message: "Target end date must be on or after the start date.",
+    path: ["targetEndDate"],
+  },
+);
 
 export const milestoneInputSchema = z.object({
   title: z.string().trim().min(2).max(140),

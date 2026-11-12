@@ -139,9 +139,6 @@ export function PayPalSellerSettingsCard() {
               Sandbox
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-ink-600">
-            Model 1 Platform Marketplace: Clients pay you directly for completed milestones. PayRoost never holds your funds.
-          </p>
         </div>
 
         {statusData && (

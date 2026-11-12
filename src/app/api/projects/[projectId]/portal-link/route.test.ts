@@ -45,7 +45,8 @@ describe("Phase 3B.2.3 & 3B.2.3.1: Owner Portal-Link Issuance (POST /api/project
     setNodeEnv(originalNodeEnv);
     process.env.PAYROOST_APP_URL = "https://app.payroost.com";
     delete process.env.NEXT_PUBLIC_APP_URL;
-    delete process.env.RESEND_API_KEY;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
 
     // Default mock behavior: Authenticated owner with successful RPC and valid project
     mockGetUser.mockResolvedValue({ data: { user: validUser }, error: null });
@@ -537,7 +538,7 @@ describe("Phase 3B.2.3 & 3B.2.3.1: Owner Portal-Link Issuance (POST /api/project
     const projectId = getUniqueProjectId();
     vi.spyOn(emailProvider, "sendPortalInvitationEmail").mockResolvedValueOnce({
       success: true,
-      messageId: "resend-msg-12345",
+      messageId: "smtp-msg-12345",
     });
 
     const req = createRequest(projectId);
@@ -571,7 +572,7 @@ describe("Phase 3B.2.3 & 3B.2.3.1: Owner Portal-Link Issuance (POST /api/project
 
     vi.spyOn(emailProvider, "sendPortalInvitationEmail").mockResolvedValueOnce({
       success: true,
-      messageId: "resend-msg-privacy-1",
+      messageId: "smtp-msg-privacy-1",
     });
 
     const req = createRequest(projectId);

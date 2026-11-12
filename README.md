@@ -6,7 +6,7 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%7C%20PostgreSQL-3ECF8E.svg)](https://supabase.com/)
 [![PayPal](https://img.shields.io/badge/PayPal-Multiparty%20Sandbox-003087.svg)](https://developer.paypal.com/)
 [![AG Grid](https://img.shields.io/badge/AG%20Grid-React%20Community-0088cc.svg)](https://www.ag-grid.com/)
-[![Tests](https://img.shields.io/badge/Tests-1%2C212%20Passing-brightgreen.svg)](vitest.config.ts)
+[![Tests](https://img.shields.io/badge/Tests-1%2C224%20Passing-brightgreen.svg)](vitest.config.ts)
 
 **AI-assisted freelance agreements, milestone lifecycle management, and seller-directed marketplace payments.**
 
@@ -42,9 +42,10 @@ PayRoost bridges the gap between independent professionals and clients by turnin
 | **Framework** | [Next.js](https://nextjs.org/) (App Router, Turbopack, Server Actions) |
 | **Language** | [TypeScript](https://www.typescriptlang.org/) (Strict Mode) |
 | **Database & Auth** | [Supabase](https://supabase.com/) (PostgreSQL 15+, Row Level Security, RPCs) |
-| **Styling** | [Tailwind CSS](https://tailwindcss.com/) & Radix UI primitives |
+| **Styling & UI** | [Tailwind CSS](https://tailwindcss.com/), custom UI primitives (`src/components/ui/`), Lucide icons & self-hosted `Plus Jakarta Sans` / `Manrope` |
 | **Data Grid** | [AG Grid React Community](https://www.ag-grid.com/) |
-| **AI Integration** | [Google Gemini API](https://ai.google.dev/) (Agreements & Change Analysis) |
+| **AI Integration** | [Google Gemini API](https://ai.google.dev/) (Briefs, Agreements, Scope Analysis & Assistant) |
+| **Email Delivery** | Gmail SMTP via [Nodemailer](https://nodemailer.com/) (server-only, no custom domain required) |
 | **Payments** | [PayPal Complete Payments Platform (Multiparty)](https://developer.paypal.com/) Sandbox |
 | **Testing** | [Vitest](https://vitest.dev/) with `jsdom`, static SQL invariant suites |
 
@@ -80,39 +81,45 @@ PayRoost bridges the gap between independent professionals and clients by turnin
    cp .env.example .env.local
    ```
 
-   Key environment variables (see [`.env.example`](.env.example) for the complete annotated template):
+   Key environment variables (see [`.env.example`](.env.example) for required vs optional annotations):
    ```ini
-   # Supabase
+   # Supabase (Required)
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-   # AI Assistant (Gemini Free Tier)
+   # AI Assistant (Optional unless AI routes are used)
    GEMINI_API_KEY=your-gemini-api-key
    GEMINI_MODEL=gemini-3.8-flash
    GEMINI_TIMEOUT_MS=25000
    GEMINI_MAX_RETRIES=2
 
-   # PayPal Sandbox (Multiparty Platform)
+   # PayPal Sandbox Multiparty Platform (Required for seller onboarding & checkout)
    PAYPAL_ENV=sandbox
    PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
    PAYPAL_PAYMENT_MODE=PLATFORM
    PAYPAL_CLIENT_ID=your-sandbox-client-id
    PAYPAL_CLIENT_SECRET=your-sandbox-client-secret
    PAYPAL_EXPECTED_MERCHANT_ID=your-sandbox-merchant-id
+   PAYPAL_PARTNER_MERCHANT_ID=your-platform-sandbox-merchant-id
+   PAYPAL_WEBHOOK_ID=your-sandbox-webhook-id
+   # Optional PayPal overrides
    PAYPAL_PLATFORM_CLIENT_ID=
    PAYPAL_PLATFORM_CLIENT_SECRET=
-   PAYPAL_PARTNER_MERCHANT_ID=your-platform-sandbox-merchant-id
    PAYPAL_PARTNER_ATTRIBUTION_ID=
-   PAYPAL_WEBHOOK_ID=your-sandbox-webhook-id
 
-   # Application & Email
+   # Application URL & Gmail SMTP Email Delivery
    PAYROOST_APP_URL=http://localhost:3000
    NEXT_PUBLIC_APP_URL=http://localhost:3000
-   RESEND_API_KEY=your-resend-key
-   PAYROOST_EMAIL_FROM=Payroost <onboarding@resend.dev>
+   SMTP_USER=youraddress@gmail.com
+   SMTP_PASS=your-16-char-google-app-password
+   # Optional SMTP overrides (defaults target Gmail SSL)
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_SECURE=true
+   PAYROOST_EMAIL_FROM=Payroost <youraddress@gmail.com>
 
-   # Security Secrets (server-only, >= 32 bytes for HMAC keys)
+   # Security Secrets (Server-only, >= 32 bytes for HMAC keys)
    PAYROOST_OTP_SECRET=your-32-plus-byte-review-otp-secret
    PORTAL_OTP_HMAC_SECRET=your-32-plus-byte-portal-otp-secret
    PAYROOST_AI_SNAPSHOT_SECRET=your-32-plus-byte-ai-snapshot-secret
@@ -152,7 +159,7 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-For deploying/testing against live Supabase, Resend, Gemini, and PayPal Sandbox endpoints, follow [`Payroost_Codex_Starter/reports_and_history/live-sandbox-integration-checklist.md`](Payroost_Codex_Starter/reports_and_history/live-sandbox-integration-checklist.md).
+For deploying/testing against live Supabase, Gmail SMTP, Gemini, and PayPal Sandbox endpoints, follow [`docs/system_architecture/DEPLOYMENT_AND_SANDBOX_CHECKLIST.md`](docs/system_architecture/DEPLOYMENT_AND_SANDBOX_CHECKLIST.md). See [`docs/README.md`](docs/README.md) for updated system architecture docs and preserved original starter specs.
 
 ---
 
@@ -161,7 +168,7 @@ For deploying/testing against live Supabase, Resend, Gemini, and PayPal Sandbox 
 PayRoost includes an extensive automated test suite covering unit tests, route handlers, UI workflows, session/secret security, and database invariant contracts.
 
 ```bash
-# 1. Run all 1,221 tests across 97 suites
+# 1. Run all 1,224 tests across 98 suites
 npm test
 
 # 2. Run TypeScript compiler diagnostics
@@ -180,41 +187,35 @@ npm run build
 
 ```text
 payroost/
-├── Payroost_Codex_Starter/       # Product specifications, architecture docs & reports
-│   ├── ARCHITECTURE.md           # System design & flow specifications
-│   ├── DATA_MODEL.md             # Entity relationships & state machine
-│   ├── PAYPAL_INTEGRATION.md     # Multiparty integration & country rules
-│   ├── SECURITY_PRIVACY.md       # Access model & risk boundaries
-│   └── reports_and_history/      # Phase reports, AI audits & live Sandbox checklist
+├── docs/
+│   ├── README.md                 # Documentation directory index
+│   ├── system_architecture/      # Live architecture, model changes, schema, security & UI docs
+│   │   ├── ARCHITECTURE.md       # App Router pages, 47 API routes & domain modules
+│   │   ├── DATA_MODEL.md         # 20 PostgreSQL tables, triggers & RPCs across 35 migrations
+│   │   ├── DEPLOYMENT_AND_SANDBOX_CHECKLIST.md
+│   │   ├── MODEL_AND_ARCHITECTURE_CHANGES.md
+│   │   ├── SECURITY_PRIVACY.md   # Fail-closed secrets, CSRF, OTP, rate limiting & AI guards
+│   │   └── UX_UI_SPEC.md         # Brand tokens, self-hosted fonts, motion & landing assets
+│   └── Payroost_Codex_Starter/   # Preserved original Codex starter specs & phase reports
+├── public/
+│   ├── brand/                    # Custom PayRoost SVG logos & favicon
+│   └── images/landing/           # Editorial showcase imagery for /
 ├── src/
-│   ├── app/                      # Next.js App Router (pages & API routes)
-│   │   ├── (app)/                # Authenticated freelancer workspace & notifications
+│   ├── app/                      # Next.js App Router (pages & 47 backend API routes)
+│   │   ├── (app)/app/            # Freelancer workspace (/app, projects, payments, notifications, settings)
 │   │   ├── (auth)/               # Login & signup routes
-│   │   ├── api/                  # Secure backend routes (AI, app, projects, public, webhooks, internal)
-│   │   ├── portal/               # Verified client workspace portal (/portal/[token])
-│   │   ├── review/               # Public client agreement review (/review/[token])
-│   │   └── verify-client-email/  # Client email verification flow
-│   ├── features/                 # Modular domain logic
-│   │   ├── agreements/           # Scope editor, versioning & OTP review security
-│   │   ├── assistant/            # AI-6 context-aware project assistant
-│   │   ├── briefs/               # AI-2 project brief structuring
-│   │   ├── freelancer/           # PayPal Partner Referrals onboarding & seller readiness
-│   │   ├── history/              # Audience-filtered chronological project history
-│   │   ├── milestones/           # AI-4 milestone planning, sync & deliverable acceptance
-│   │   ├── notifications/        # Persistent notification projection & notification center
-│   │   ├── payments/             # AG Grid operations grid, capture, recovery & ledger contracts
-│   │   ├── portal/               # Client portal auth view, checkout & workspace
-│   │   ├── projects/             # Project workspace, overview & invite management
-│   │   └── scope-changes/        # AI-5 signed scope-change impact preview & change requests
-│   └── lib/                      # Core cross-cutting infrastructure
-│       ├── ai/                   # Gemini client, audit logger, error redaction & env config
-│       ├── auth/                 # Authenticated user/session guards
-│       ├── email/                # Resend transactional email provider & templates
-│       ├── paypal/               # PayPal Platform client, webhook verifier & reconciliation
-│       ├── security/             # Canonical app URL, CSRF, HMAC tokens, rate limiters & client IP
-│       └── supabase/             # Server, browser, middleware & service-role DB factories
+│   │   ├── api/                  # Secure routes (ai, app, projects, public, webhooks, internal)
+│   │   ├── portal/[token]/       # Verified client workspace portal
+│   │   ├── review/[token]/       # Public client agreement review & OTP approval
+│   │   ├── verify-client-email/  # Client email verification flow
+│   │   └── page.tsx              # Redesigned editorial landing page
+│   ├── components/               # Brand mark, app shell, auth form, landing showcase & UI primitives
+│   ├── features/                 # Modular domain logic (agreements, ai, milestones, payments, portal, etc.)
+│   ├── lib/                      # Server-only ai, auth, email (nodemailer), paypal, security & supabase
+│   └── test/                     # Vitest environment & shared test setup
 ├── supabase/
 │   └── migrations/               # 35 sequential PostgreSQL migrations
+├── .env.example                  # Annotated environment template (no secrets)
 ├── LICENSE                       # MIT Open Source License
 └── README.md                     # Repository documentation & setup guide
 ```

@@ -148,7 +148,7 @@ describe("Phase 2A.4: Verified Client Identity and Secure Agreement Decisions", 
 
     it("7. Email delivery failure does not mark the address as verified", () => {
       const project = { client_email_verified_at: null };
-      const emailDeliveryResult = { success: false, error: "RESEND_API_ERROR_500" };
+      const emailDeliveryResult = { success: false, error: "EMAIL_DELIVERY_ERROR_500" };
 
       if (!emailDeliveryResult.success) {
         // Do not update project verification state

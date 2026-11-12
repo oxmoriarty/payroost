@@ -15,9 +15,6 @@ export default async function ProjectsPage() {
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.14em] text-teal-700">Projects</p>
           <h1 className="mt-2 font-display text-3xl text-ink-950 sm:text-4xl">The work you have in motion.</h1>
-          <p className="mt-2 text-sm text-ink-700 sm:text-base">
-            Each project keeps its agreement, milestones, client verification, and activity together.
-          </p>
         </div>
         <Link className="w-full sm:w-auto" href="/app/projects/new">
           <Button className="w-full sm:w-auto">

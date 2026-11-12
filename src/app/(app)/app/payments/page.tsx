@@ -1,26 +1,19 @@
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PaymentOperationsGrid } from "@/features/payments/payment-operations-grid";
 import { getPaymentOperationsData } from "@/features/payments/operations-data";
 import { formatMoney } from "@/lib/utils";
-import {
-  generateOperatorCsrfSecret,
-  getOperatorCsrfCookieName,
-  getOperatorCsrfCookieOptions,
-} from "@/lib/security/operator-csrf";
+
+export const dynamic = "force-dynamic";
 
 export default async function PaymentOperationsPage() {
-  // Ensure operator CSRF cookie is initialized for client mutations
-  const cookieStore = await cookies();
-  const csrfCookieName = getOperatorCsrfCookieName();
-  if (!cookieStore.has(csrfCookieName)) {
-    const csrfToken = generateOperatorCsrfSecret();
-    cookieStore.set(csrfCookieName, csrfToken, getOperatorCsrfCookieOptions());
-  }
-
-  // Load real server-side payment records and metrics
+  // Load real server-side payment records and metrics (operator CSRF cookie is initialized on the client via GET /api/app/csrf).
   const { rows, summary, isOwner, error } = await getPaymentOperationsData();
+
+  if (error === "UNAUTHORIZED") {
+    redirect("/login");
+  }
 
   return (
     <>

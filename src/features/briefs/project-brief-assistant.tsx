@@ -66,22 +66,57 @@ export function ProjectBriefAssistant({
         }),
       });
 
-      const payload = await response.json();
+      type StructureBriefApiResponse = {
+        error?: string;
+        message?: string;
+        data?: { brief?: StructuredBrief };
+      };
+      let payload: StructureBriefApiResponse | null = null;
+      try {
+        payload = (await response.json()) as StructureBriefApiResponse | null;
+      } catch {
+        payload = null;
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error("You must be logged in to structure project briefs.");
         }
         if (response.status === 429) {
-          throw new Error("AI request limit reached. Please wait a minute before trying again.");
-        }
-        if (response.status === 503) {
-          throw new Error("AI service is temporarily unavailable. Please retry in a moment.");
+          throw new Error(
+            payload?.message || "AI request limit reached. Please wait a minute before trying again."
+          );
         }
         if (response.status === 422) {
-          throw new Error("AI generated an incomplete brief. Please provide a more descriptive summary and try again.");
+          throw new Error(
+            payload?.message ||
+              "AI generated an incomplete brief. Please provide a more descriptive summary and try again."
+          );
         }
-        throw new Error(payload.message || payload.error || "Unable to structure project brief.");
+        if (payload?.error === "AI_CONFIG_ERROR") {
+          throw new Error(
+            payload.message ||
+              "AI brief generation is not properly configured on the server. Verify GEMINI_API_KEY and GEMINI_MODEL."
+          );
+        }
+        if (payload?.error === "RATE_LIMITER_UNAVAILABLE") {
+          throw new Error(
+            payload.message || "Rate limiting service is temporarily unavailable. Please try again shortly."
+          );
+        }
+        if (response.status === 503) {
+          throw new Error(
+            payload?.message || "AI service is temporarily unavailable. Please retry in a moment."
+          );
+        }
+        if (response.status === 502 || response.status === 504) {
+          throw new Error("The AI request timed out before finishing. Please retry in a moment.");
+        }
+        throw new Error(payload?.message || payload?.error || "Unable to structure project brief.");
+      }
+
+      if (!payload?.data?.brief) {
+        throw new Error("AI response did not contain a valid structured brief.");
       }
 
       setBrief(payload.data.brief);
@@ -109,15 +144,7 @@ export function ProjectBriefAssistant({
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
               <Sparkles className="h-5 w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-display text-xl text-ink-950">AI Project Brief Assistant</h3>
-                <Badge tone="info">Free Tier</Badge>
-              </div>
-              <p className="mt-0.5 text-xs text-ink-700">
-                Transform rough client notes or emails into a structured, reviewable project brief before creating agreements.
-              </p>
-            </div>
+            <h3 className="font-display text-xl text-ink-950">AI Project Brief Assistant</h3>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -133,9 +160,8 @@ export function ProjectBriefAssistant({
               />
             </label>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500">
+            <div className="flex flex-wrap items-center justify-start gap-3 text-xs text-ink-500">
               <span>{description.length} / 10,000 characters</span>
-              <span>All AI output is reviewed by you before use.</span>
             </div>
           </div>
 
@@ -152,10 +178,7 @@ export function ProjectBriefAssistant({
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-teal-800">
-              Untrusted client input is isolated. The AI will not invent budgets, deadlines, or client agreements.
-            </p>
+          <div className="mt-6 flex justify-end">
             <Button
               disabled={description.trim().length < 10}
               onClick={handleStructureBrief}

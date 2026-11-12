@@ -1,6 +1,6 @@
 # PayRoost — Live Sandbox Integration Checklist
 
-Use this runbook to transition PayRoost from mocked local verification (`95` suites / `1,212` tests passing) to a working live Sandbox environment across **Supabase**, **Resend**, **Google Gemini**, and **PayPal Complete Payments Platform (Multiparty) Sandbox**.
+Use this runbook to transition PayRoost from mocked local verification (`95` suites / `1,212` tests passing) to a working live Sandbox environment across **Supabase**, **Gmail SMTP**, **Google Gemini**, and **PayPal Complete Payments Platform (Multiparty) Sandbox**.
 
 > **Important Scope Note:** `src/lib/paypal/env.ts` strictly enforces `PAYPAL_ENV=sandbox` and `PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com`. Live real-money PayPal production endpoints are rejected by design.
 
@@ -29,9 +29,10 @@ Populate `.env.local` (for local development) or your deployment provider's encr
 - [ ] **Gemini AI (`src/lib/ai/env.ts`):**
   - `GEMINI_API_KEY`
   - `GEMINI_MODEL=gemini-3.8-flash` (default)
-- [ ] **Resend Email (`src/lib/email/provider.ts`):**
-  - `RESEND_API_KEY`
-  - `PAYROOST_EMAIL_FROM` (verified sending domain if sending to arbitrary client test inboxes; Resend's default `onboarding@resend.dev` is restricted to account owner recipients unless verified).
+- [ ] **Gmail SMTP Email (`src/lib/email/provider.ts`):**
+  - `SMTP_USER` and `SMTP_PASS` (16-character Google App Password)
+  - `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true` (optional overrides)
+  - `PAYROOST_EMAIL_FROM` (optional; defaults to `Payroost <SMTP_USER>`)
 - [ ] **PayPal Complete Payments Platform Sandbox (`src/lib/paypal/env.ts` & `src/lib/paypal/payment-mode.ts`):**
   - `PAYPAL_ENV=sandbox`
   - `PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com`
@@ -92,14 +93,14 @@ Run these journeys sequentially using real test accounts and verify database/UI 
 - [ ] Create a new project (`/app/projects/new`) with a USD budget and test client email.
 
 ### B. Client Email Verification & AI-2 / AI-3 / AI-4 Authoring
-- [ ] Trigger client email verification and verify delivery in Resend logs.
+- [ ] Trigger client email verification and verify SMTP delivery to the client inbox.
 - [ ] Open the verification email link (`/verify-client-email?token=...`) and click verify (`POST /api/public/verify-client-email`).
   - Confirm `client_email_verified_at` is populated (`verify_client_email` RPC) and rate limiting (`checkRateLimit` / `consume_rate_limit`) protects repeated attempts.
 - [ ] Run **AI-2** Project Brief Structuring, **AI-3** Agreement Drafting, and **AI-4** Milestone Planning; explicitly apply/save the draft and inspect saved milestones in `/app/projects/[projectId]`.
 
 ### C. Client Agreement Review & OTP Approval (`/review/[token]`)
 - [ ] Generate a Client Review Link (`POST /api/projects/[projectId]/review-link`) and confirm the URL uses `PAYROOST_APP_URL` / `NEXT_PUBLIC_APP_URL`.
-- [ ] Open `/review/[token]` -> request OTP (`POST /api/public/review/[token]/otp`) -> confirm Resend email delivery (`PAYROOST_OTP_SECRET`).
+- [ ] Open `/review/[token]` -> request OTP (`POST /api/public/review/[token]/otp`) -> confirm SMTP OTP email delivery (`PAYROOST_OTP_SECRET`).
 - [ ] Approve the agreement with the 6-digit OTP (`POST /api/public/review/[token]`).
   - Confirm agreement locks as `APPROVED`, milestones materialize/sync (`syncApprovedAgreementMilestones`), and notifications + history events appear.
 

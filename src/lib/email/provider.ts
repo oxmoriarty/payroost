@@ -110,11 +110,6 @@ function resolveSmtpConfig(): SmtpConfigResolution {
   };
 }
 
-function getResendApiKey(): string | undefined {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  return apiKey || undefined;
-}
-
 function sanitizeErrorMessage(message: string, secrets: Array<string | undefined>): string {
   let sanitized = message;
   for (const secret of secrets) {
@@ -126,21 +121,7 @@ function sanitizeErrorMessage(message: string, secrets: Array<string | undefined
 }
 
 export function isEmailConfigured(): boolean {
-  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
-  const smtp = resolveSmtpConfig();
-  const resendConfigured = Boolean(getResendApiKey());
-
-  if (provider === "smtp") {
-    return smtp.status === "configured";
-  }
-  if (provider === "resend") {
-    return resendConfigured;
-  }
-  if (provider) {
-    return false;
-  }
-
-  return smtp.status === "configured" || resendConfigured;
+  return resolveSmtpConfig().status === "configured";
 }
 
 export function getSenderEmail(): string {
@@ -154,7 +135,7 @@ export function getSenderEmail(): string {
     return `Payroost <${smtp.config.user}>`;
   }
 
-  return "Payroost <onboarding@resend.dev>";
+  return "Payroost <no-reply@payroost.local>";
 }
 
 export function getAppUrl(): string {
@@ -196,81 +177,9 @@ async function sendViaSmtp(
   }
 }
 
-async function sendViaResend(
-  apiKey: string,
-  from: string,
-  params: SendEmailParams
-): Promise<EmailDeliveryResult> {
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: params.to,
-        subject: params.subject,
-        html: params.html,
-        text: params.text,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      return {
-        success: false,
-        error: `EMAIL_SEND_FAILED (${response.status}): ${sanitizeErrorMessage(errorData, [apiKey])}`,
-      };
-    }
-
-    const data = (await response.json()) as { id?: string };
-    return { success: true, messageId: data.id };
-  } catch (err) {
-    const rawMessage = err instanceof Error ? err.message : "Unknown email dispatch failure";
-    return {
-      success: false,
-      error: sanitizeErrorMessage(rawMessage, [apiKey]),
-    };
-  }
-}
-
 export async function sendEmail(params: SendEmailParams): Promise<EmailDeliveryResult> {
-  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
   const smtp = resolveSmtpConfig();
-  const apiKey = getResendApiKey();
   const from = getSenderEmail();
-
-  if (provider === "smtp") {
-    if (smtp.status === "invalid") {
-      return { success: false, error: smtp.error };
-    }
-    if (smtp.status === "unconfigured") {
-      return {
-        success: false,
-        error: "EMAIL_PROVIDER_NOT_CONFIGURED: SMTP_USER and SMTP_PASS environment variables are not set.",
-      };
-    }
-    return sendViaSmtp(smtp.config, from, params);
-  }
-
-  if (provider === "resend") {
-    if (!apiKey) {
-      return {
-        success: false,
-        error: "EMAIL_PROVIDER_NOT_CONFIGURED: RESEND_API_KEY environment variable is not set.",
-      };
-    }
-    return sendViaResend(apiKey, from, params);
-  }
-
-  if (provider) {
-    return {
-      success: false,
-      error: "EMAIL_PROVIDER_MISCONFIGURED: Unsupported EMAIL_PROVIDER. Expected 'smtp' or 'resend'.",
-    };
-  }
 
   if (smtp.status === "invalid") {
     return { success: false, error: smtp.error };
@@ -278,10 +187,6 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailDeliveryR
 
   if (smtp.status === "configured") {
     return sendViaSmtp(smtp.config, from, params);
-  }
-
-  if (apiKey) {
-    return sendViaResend(apiKey, from, params);
   }
 
   // Test environment spy (without leaking secrets or tokens)
@@ -292,7 +197,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailDeliveryR
 
   return {
     success: false,
-    error: "EMAIL_PROVIDER_NOT_CONFIGURED: Set SMTP_USER and SMTP_PASS (Gmail SMTP) or RESEND_API_KEY.",
+    error: "EMAIL_PROVIDER_NOT_CONFIGURED: SMTP_USER and SMTP_PASS environment variables are not set.",
   };
 }
 

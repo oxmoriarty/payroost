@@ -62,9 +62,6 @@ export function ProjectsListView({ projects }: { projects: ProjectSummaryItem[] 
     return (
       <Card className="mt-8 p-10 text-center">
         <h2 className="font-display text-2xl text-ink-950">No projects yet.</h2>
-        <p className="mx-auto mt-3 max-w-md text-ink-700">
-          Start with the facts you know. You can shape the agreement and milestones inside the project workspace.
-        </p>
         <Link className="mt-6 inline-block" href="/app/projects/new">
           <Button>Create your first project</Button>
         </Link>

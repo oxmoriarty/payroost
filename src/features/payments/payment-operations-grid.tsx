@@ -30,6 +30,13 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+function safeFormatDate(value?: string | null): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return dateFormatter.format(parsed);
+}
+
 type QuickTab = "ALL" | "ACTION_REQUIRED" | "IN_FLIGHT" | "COMPLETED" | "CANCELLED";
 
 interface PaymentOperationsGridProps {
@@ -54,6 +61,13 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
   const [modalInitialView, setModalInitialView] = useState<"inspect" | "recover">("inspect");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (!isOwner || typeof fetch !== "function") return;
+    Promise.resolve(
+      fetch("/api/app/csrf", { method: "GET", credentials: "same-origin" })
+    ).catch(() => undefined);
+  }, [isOwner]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -449,7 +463,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
               )}
               {!data?.webhookErrorDetails && data?.webhookNextAttemptAt && (
                 <span className="text-[10px] text-amber-700">
-                  Next: {dateFormatter.format(new Date(data.webhookNextAttemptAt))}
+                  Next: {safeFormatDate(data.webhookNextAttemptAt)}
                 </span>
               )}
             </div>
@@ -462,7 +476,7 @@ export function PaymentOperationsGrid({ rows, isOwner = false }: PaymentOperatio
         minWidth: 165,
         filter: "agTextColumnFilter",
         cellRenderer: ({ value, data }: { value?: string | null; data?: PaymentOperationRow }) => {
-          const updatedStr = data?.updatedAt ? dateFormatter.format(new Date(data.updatedAt)) : "—";
+          const updatedStr = safeFormatDate(data?.updatedAt);
           return (
             <div className="flex flex-col py-1 leading-tight">
               <span className="font-mono text-[11px] text-ink-800">{value || "—"}</span>
